@@ -61,6 +61,8 @@ class Estado(MessagesState):
     agentes_chamados: Annotated[list[str], operator.add]
     rota:             str
     mapa_pii:         dict   
+    user_id:          str
+    session_id:       str
 
 
 # ==============================================================================
@@ -112,20 +114,20 @@ def no_guardrail_entrada(estado: Estado, config: RunnableConfig) -> dict:
     anonimizado, mapa_pii = anonimizar_entrada(msg_original.content)
     resultado_guardrail = guardrail_entrada(anonimizado)
     session_id = config["configurable"]["thread_id"]
-    salvar_mensagem(session_id, "human", anonimizado)
+    salvar_mensagem(session_id, "human", anonimizado, estado["user_id"])
     if resultado_guardrail["bloqueado"]:
         return {
             "agentes_chamados": ["guardrail_entrada"],
             "rota":             "fim",
             "messages":         [{"role": "assistant", "content": resultado_guardrail["mensagem"]}],
-            "mapa_pii":         mapa_pii,   
+            "mapa_pii":         mapa_pii
         }
     else:
         return {
             "agentes_chamados": ["guardrail_entrada"],
             "rota":             "roteador",
             "messages":         [RemoveMessage(id=msg_original.id), {"role": "human", "content": anonimizado}],
-            "mapa_pii":         mapa_pii,
+            "mapa_pii":         mapa_pii
         }
     
     
@@ -134,7 +136,7 @@ def no_guardrail_saida(estado: Estado) -> dict:
     resultado = guardrail_saida(ultima, estado.get("mapa_pii", {}))
     return {
         "messages":         [{"role": "assistant", "content": resultado["conteudo"]}],
-        "agentes_chamados": ["guardrail_saida"],
+        "agentes_chamados": ["guardrail_saida"]
     }
 
 
@@ -198,16 +200,17 @@ fluxo_agentes = grafo.compile(checkpointer=memory)
 # ==============================================================================
 # FLUXO PRINCIPAL
 # ==============================================================================
-def executar_fluxo_assessor(pergunta_usuario: str, session_id: str) -> str:
+def executar_fluxo_assessor(pergunta_usuario: str, session_id: str, user_id: str) -> str:
     estado_inicial = {
         "messages":         [{"role": "human", "content": pergunta_usuario}],
         "agentes_chamados": [],
         "rota":             "",
-        "mapa_pii":         {}
+        "mapa_pii":         {},
+        "user_id":          user_id
     }
 
     estado_final = fluxo_agentes.invoke(
         estado_inicial,
-        config={"configurable": {"thread_id": session_id}},
+        config={"configurable": {"thread_id": session_id, "user_id": user_id}}
     )
     return estado_final["messages"][-1].text

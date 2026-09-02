@@ -6,8 +6,6 @@ SAÍDA    → redigir PII → desanonimizar → revisar compliance (LLM)
 """
 import re
 import uuid
-from langchain_groq import ChatGroq
-from app.config import GROQ_API_KEY
 from app.llms import llm_rapido
 
 # ==============================================================================

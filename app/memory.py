@@ -55,9 +55,14 @@ col_sessoes.create_index("iniciada_em")
 _PROMPT_RESUMO = """\
 Você é um assistente que resume conversas de assessoria financeira e agenda.
 Gere um resumo conciso em 2-4 frases capturando:
-- O que o usuário fez (transações registradas, eventos agendados)
+- O que o usuário fez NESTA conversa (transações registradas, eventos agendados)
 - O que o usuário perguntou
 - Informações relevantes mencionadas (valores, datas, categorias)
+
+REGRA IMPORTANTE: se o usuário apenas consultou CONVERSAS ANTERIORES
+(ex.: "o que falamos na última sessão?", "o que eu disse sobre X?"),
+registre SOMENTE a pergunta/consulta feita. NÃO re-registre o fato
+recuperado da memória como se fosse uma ação nova acontecida nesta conversa.
 
 Responda APENAS com o resumo, sem introdução ou explicação.
 
@@ -138,23 +143,11 @@ def encerrar_sessao(session_id) -> str:
 
     doc = col_sessoes.find_one({"_id": doc_id})
 
-    if not doc:
+    if not doc or not doc.get("mensagens"):
         _sessoes_ativas.pop(session_id, None)
-        return
+        return ""
 
-    # se mensagens for impar dar um pop no banco e delete no documento se mensagens forem vazias
-    msg = doc.get("mensagens", [])
-    if not msg or msg == []:
-        col_sessoes.delete_one({"_id": doc_id})
-        return
-    if len(msg) % 2 != 0:
-        col_sessoes.update_one(
-            {"_id": doc_id},
-            {"$pop": {"mensagens": -1}}
-        )
-        msg = msg[:-1]
-    
-    resumo = _gerar_resumo(msg)
+    resumo = _gerar_resumo(doc["mensagens"])
 
     col_sessoes.update_one(
         {"_id": doc_id},

@@ -141,6 +141,11 @@ na resposta ou na decisão de roteamento.
 
 Se a memória responder diretamente à pergunta atual:
 - Responda ao usuário em linguagem natural.
+- Fale SEMPRE no passado, atribuindo o fato à conversa correta e citando a
+  data retornada (ex.: "Em 12/03 você comentou que...").
+- NUNCA trate o conteúdo recuperado como algo dito ou feito NESTE chat: não
+  use "você perguntou", "você registrou", "eu lhe informei" ou "eu mencionei"
+  para fatos vindos de outra sessão.
 - NÃO emita "ROUTE=" nem "PERGUNTA_ORIGINAL=".
 - NÃO encaminhe para um especialista apenas porque o conteúdo recuperado menciona finanças ou agenda.
 
@@ -369,7 +374,10 @@ que já está nas mensagens acima — isso é a conversa atual, não o passado.
 
 O resultado da tool é INSUMO, não resposta: use o conteúdo para preencher o
 JSON. NUNCA devolva o texto da tool cru, e NUNCA invente uma conversa passada.
-Se a tool não encontrar nada e isso impedir a resposta, use "esclarecer".
+Ao citar uma conversa anterior no JSON de resposta, escreva no PASSADO,
+atribuindo o fato àquela sessão (ex.: "Na conversa de 12/03 você definiu..."),
+nunca como ação deste chat. Se a tool não encontrar nada e isso impedir a
+resposta, use "esclarecer".
 
 
 ### SAÍDA (JSON)
@@ -484,7 +492,10 @@ que já está nas mensagens acima — isso é a conversa atual, não o passado.
 
 O resultado da tool é INSUMO, não resposta: use o conteúdo para preencher o
 JSON. NUNCA devolva o texto da tool cru, e NUNCA invente uma conversa passada.
-Se a tool não encontrar nada e isso impedir a resposta, use "esclarecer".
+Ao citar uma conversa anterior no JSON de resposta, escreva no PASSADO,
+atribuindo o fato àquela sessão (ex.: "Na conversa de 12/03 você definiu..."),
+nunca como ação deste chat. Se a tool não encontrar nada e isso impedir a
+resposta, use "esclarecer".
 
 
 ### SAÍDA (JSON)

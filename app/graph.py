@@ -213,4 +213,8 @@ def executar_fluxo_assessor(pergunta_usuario: str, session_id: str, user_id: str
         estado_inicial,
         config={"configurable": {"thread_id": session_id, "user_id": user_id}}
     )
-    return estado_final["messages"][-1].text
+    resposta = estado_final["messages"][-1].text
+
+    salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
+
+    return resposta

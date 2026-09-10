@@ -8,6 +8,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from app.tools.memoria import TOOLS_MEMORIA
 from app.tools.financeiro import TOOLS
+from app.tools.perfil import TOOLS_PERFIL
 from app.tools.faq import FAQ_TOOLS
 from app.prompts import (
     ROUTER_PROMPT_COMPLETO,
@@ -32,7 +33,7 @@ router_app = create_agent(
 
 financeiro_app = create_agent(
     model=llm_especialista,
-    tools=TOOLS + TOOLS_MEMORIA,
+    tools=TOOLS + TOOLS_MEMORIA + TOOLS_PERFIL,
     system_prompt=FINANCEIRO_PROMPT_COMPLETO,
 )
 

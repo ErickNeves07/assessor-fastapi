@@ -1,11 +1,13 @@
 """
 Cliente Qdrant e função de embedding — centralizados aqui.
 
-Dois consumidores:
-  - memory.py   → salva/busca resumos na collection "memoria_resumos"
-  - tools/faq.py → busca chunks do PDF na collection "faq_chunks"
+Consumidores:
+  - memory.py        → salva/busca resumos na collection "memoria_resumos"
+  - tools/faq.py     → busca chunks do PDF na collection "faq_chunks"
+  - app/perfil.py    → indexa o texto livre de preferencias na collection
+                       "perfil_preferencias" (busca semântica)
 
-O modelo de embedding é o mesmo para ambos (gemini-embedding-2-preview, 768d),
+O modelo de embedding é o mesmo para todos (gemini-embedding-2-preview, 768d),
 então instanciamos uma vez só.
 """
 
@@ -17,6 +19,7 @@ qdrant = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
 COLLECTION_MEMORIA = "memoria_resumos"
 COLLECTION_FAQ     = "faq_chunks"
+COLLECTION_PERFIL  = "perfil_preferencias"
 EMBEDDING_DIM      = 768
 
 _embeddings = GoogleGenerativeAIEmbeddings(

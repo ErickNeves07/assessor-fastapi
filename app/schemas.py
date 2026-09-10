@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from typing import Literal
 
 class ChatRequest(BaseModel):
     """O que o navegador envia no POST /chat."""
@@ -32,3 +33,17 @@ class SessionResponse(BaseModel):
     """O que a API devolve no POST /sessions/{session_id}/encerrar."""
     session_id: str
     resumo:     str | None = None
+
+class Perfil(BaseModel):
+    user_id: str
+    renda_mensal: float = Field(..., gt=0)  # > 0
+    objetivo: str = Field(..., min_length=1)  # obrigatória
+    tolerancia_risco: Literal["baixa", "media", "alta"]
+    preferencias: str
+
+class PerfilResponse(BaseModel):
+    user_id: str
+    renda_mensal: float
+    objetivo: str
+    tolerancia_risco: str
+    preferencias: str

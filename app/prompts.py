@@ -633,6 +633,31 @@ Compromissos, eventos, lembretes, tarefas, disponibilidade e conflitos de agenda
 - Se faltarem dados para registrar um evento, use o campo "esclarecer".
 - Responda APENAS com o JSON abaixo, sem markdown, sem texto extra.
 
+### GRAVAÇÃO — LEIA ANTES DE RESPONDER "criar"
+Informar um compromisso com data e hora ("tenho reunião quinta às 15h",
+"marca X amanhã às 14h") já é um pedido de registro. Não peça uma segunda
+confirmação para criar quando os dados necessários estiverem completos.
+
+Fluxo obrigatório ao criar:
+1. Chame `query_events` para consultar o dia e verificar conflitos.
+2. Sem conflito, chame `add_event` com título, source_text e horários ISO 8601
+   COM fuso (ex.: 2026-10-30T12:00:00-03:00). Se faltar duração, use uma hora
+   e mantenha o MESMO início e fim no banco e no Google.
+3. Somente se `add_event` retornar `status: "ok"` e um `id`, chame
+   `add_google_event` com os mesmos título, início, fim, local e observações.
+4. Inclua `escrita` com o ID REAL retornado pelo banco e `google: "ok"`
+   apenas se o Google também retornar sucesso e ID. Se o Google falhar,
+   use `google: "falhou"` e diga que o evento ficou salvo apenas no banco.
+
+Só diga "registrei" ou "salvei" depois da confirmação de `add_event`.
+Se o banco falhar, explique a falha e não crie o evento no Google. Não
+invente ID, sucesso, disponibilidade nem confirmação de sincronização.
+Se houver conflito, não grave: apresente o compromisso encontrado e
+pergunte por outro horário. Se faltar data ou hora, use `esclarecer`.
+Se o Google falhar após o banco gravar, NÃO chame `add_event` de novo.
+Atualizações e cancelamentos só podem ser confirmados se uma ferramenta
+disponível executar e confirmar a operação; não simule uma ferramenta ausente.
+
 
 ### MEMÓRIA DE CONVERSAS ANTERIORES
 Você tem a tool `buscar_historico`, que consulta RESUMOS de conversas ANTERIORES
@@ -666,6 +691,8 @@ Campos opcionais (incluir SOMENTE se necessário):
   - esclarecer     : pergunta mínima de clarificação
   - janela_tempo   : {{"de":"YYYY-MM-DDTHH:MM","ate":"YYYY-MM-DDTHH:MM","rotulo":"ex.: amanhã 09:00-10:00"}}
   - evento         : {{"titulo":"...","data":"YYYY-MM-DD","inicio":"HH:MM","fim":"HH:MM","local":"...","participantes":["..."]}}
+  - escrita        : {{"operacao":"adicionar","id":123,"google":"ok|falhou"}}
+                     Obrigatório após gravar. O ID vem de add_event.
 
 """
 
@@ -678,17 +705,34 @@ AGENDA_SHOTS_OPEN = (
 AGENDA_SHOT_1 = """
 Roteador: ROUTE=agenda
 PERGUNTA_ORIGINAL=[pergunta sobre janela livre em um período]
+Agenda: query_events(date_from_local="[YYYY-MM-DD]", date_to_local="[YYYY-MM-DD]")
+Tool: {"status":"ok","count":0,"results":[]}
 Agenda: {"dominio":"agenda","intencao":"disponibilidade","resposta":"Você está livre [período] das [hora início] às [hora fim].","recomendacao":"Quer reservar [sugestão de horário]?","janela_tempo":{"de":"[datetime início]","ate":"[datetime fim]","rotulo":"[rótulo]"}}"""
 #Exemplo 2 — Criação de evento:
 AGENDA_SHOT_2 = """
 Roteador: ROUTE=agenda
 PERGUNTA_ORIGINAL=[pedido para marcar evento com participante, data e duração]
-Agenda: {"dominio":"agenda","intencao":"criar","resposta":"Posso criar '[título]' em [data] [hora início]–[hora fim].","recomendacao":"Confirmo o registro?","janela_tempo":{"de":"[datetime início]","ate":"[datetime fim]","rotulo":"[rótulo]"},"evento":{"titulo":"[título]","data":"[YYYY-MM-DD]","inicio":"[HH:MM]","fim":"[HH:MM]","local":"[local]","participantes":["[participante]"]}}"""
+Agenda: query_events(date_local="[YYYY-MM-DD]")
+Tool: {"status":"ok","count":0,"results":[]}
+Agenda: add_event(title="[título]", source_text="[pergunta original]", start_time="[YYYY-MM-DDTHH:MM:00-03:00]", end_time="[YYYY-MM-DDTHH:MM:00-03:00]")
+Tool: {"status":"ok","id":[id gerado],"title":"[título]","start_time":"[datetime início]"}
+Agenda: add_google_event(title="[título]", start_time="[YYYY-MM-DDTHH:MM:00-03:00]", end_time="[YYYY-MM-DDTHH:MM:00-03:00]")
+Tool: {"status":"ok","id":"[id Google]"}
+Agenda: {"dominio":"agenda","intencao":"criar","resposta":"Registrei '[título]' em [data] [hora início]–[hora fim] no banco e no Google Calendar.","recomendacao":"","escrita":{"operacao":"adicionar","id":[id gerado],"google":"ok"}}"""
 #Exemplo 3 — Conflito de horário:
 AGENDA_SHOT_3 = """
 Roteador: ROUTE=agenda
 PERGUNTA_ORIGINAL=[pedido para marcar evento em horário já ocupado]
+Agenda: query_events(date_local="[YYYY-MM-DD]")
+Tool: {"status":"ok","count":1,"results":[{"id":[id real],"title":"[evento existente]","start_time":"[início existente]","end_time":"[fim existente]"}]}
 Agenda: {"dominio":"agenda","intencao":"conflitos","resposta":"Você já tem '[evento existente]' em [horário]; marcar [novo evento] criaria conflito.","recomendacao":"A melhor janela disponível é [horário alternativo].","acompanhamento":"Quer que eu registre para [horário alternativo]?"}"""
+
+AGENDA_SHOT_GOOGLE_FALHOU = """
+Agenda: add_event(title="[título]", source_text="[pergunta original]", start_time="[início com fuso]", end_time="[fim com fuso]")
+Tool: {"status":"ok","id":[id gerado]}
+Agenda: add_google_event(title="[título]", start_time="[início com fuso]", end_time="[fim com fuso]")
+Tool: {"status":"error","message":"Sem login do Google Calendar."}
+Agenda: {"dominio":"agenda","intencao":"criar","resposta":"Registrei '[título]' no banco, mas não consegui criar no Google Calendar.","recomendacao":"Faça o login Google pelo terminal.","escrita":{"operacao":"adicionar","id":[id gerado],"google":"falhou"}}"""
 #Exemplo 4 — Dado ausente → esclarecer:
 AGENDA_SHOT_4 = """
 Roteador: ROUTE=agenda
@@ -716,6 +760,7 @@ AGENDA_PROMPT_COMPLETO = (
     AGENDA_SHOT_3      + "\n\n" +
     AGENDA_SHOT_4      + "\n\n" +
     AGENDA_SHOT_5      + "\n\n" +
+    AGENDA_SHOT_GOOGLE_FALHOU + "\n\n" +
     AGENDA_SHOTS_CUT
 )
 

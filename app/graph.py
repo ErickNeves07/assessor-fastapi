@@ -13,6 +13,7 @@ from app.tools.financeiro import TOOLS
 from app.tools.perfil import TOOLS_PERFIL
 from app.tools.faq import FAQ_TOOLS
 from app.tools.agenda import TOOLS_AGENDA
+from app.tools.calendario_google import TOOLS_GOOGLE
 from app.prompts import (
     ROUTER_PROMPT_COMPLETO,
     FINANCEIRO_PROMPT_COMPLETO,
@@ -22,7 +23,6 @@ from app.prompts import (
 )
 from app.guardrail import anonimizar_entrada, guardrail_entrada, guardrail_saida
 from app.llms import llm_rapido, llm_especialista
-from app.memory import salvar_mensagem
 
 from app.juiz import no_juiz
 
@@ -44,7 +44,7 @@ financeiro_app = create_agent(
 
 agenda_app = create_agent(
     model=llm_especialista,
-    tools=TOOLS_MEMORIA + TOOLS_AGENDA,
+    tools=TOOLS_MEMORIA + TOOLS_AGENDA + TOOLS_GOOGLE,
     system_prompt=AGENDA_PROMPT_COMPLETO,
 )
 
@@ -69,6 +69,7 @@ class Estado(MessagesState):
     mapa_pii:         dict   
     user_id:          str
     session_id:       str
+    bloqueio_entrada: bool
 
 
 # ==============================================================================
@@ -123,14 +124,16 @@ def no_guardrail_entrada(estado: Estado, config: RunnableConfig) -> dict:
     salvar_mensagem(session_id, "human", anonimizado, estado["user_id"])
     if resultado_guardrail["bloqueado"]:
         return {
-            "agentes_chamados": ["guardrail_entrada"],
+            "agentes_chamados": [f"guardrail_entrada:{resultado_guardrail['motivo']}"],
+            "bloqueio_entrada": True,
             "rota":             "fim",
             "messages":         [{"role": "assistant", "content": resultado_guardrail["mensagem"]}],
             "mapa_pii":         mapa_pii
         }
     else:
         return {
-            "agentes_chamados": ["guardrail_entrada"],
+            "agentes_chamados": ["guardrail_entrada:aprovado"],
+            "bloqueio_entrada": False,
             "rota":             "roteador",
             "messages":         [RemoveMessage(id=msg_original.id), {"role": "human", "content": anonimizado}],
             "mapa_pii":         mapa_pii
@@ -215,6 +218,7 @@ def executar_fluxo_assessor(pergunta_usuario: str, session_id: str, user_id: str
         "agentes_chamados": [],
         "rota":             "",
         "mapa_pii":         {},
+        "bloqueio_entrada": False,
         "user_id":          user_id
     }
 

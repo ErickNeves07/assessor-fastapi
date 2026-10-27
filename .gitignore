@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# gcp-oauth-keys
+gcp-oauth.keys.json
+google-calendar.token.json
+.env.*
+!.env.example

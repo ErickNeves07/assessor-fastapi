@@ -336,6 +336,8 @@ FINANCEIRO_PROMPT = f"""
 ### OBJETIVO
 Interpretar a PERGUNTA_ORIGINAL sobre finanças e operar as tools de `transactions` para responder. 
 A saída SEMPRE é JSON para o Orquestrador.
+JSON é o formato do texto da resposta final, não uma ferramenta. Nunca chame
+uma ferramenta chamada JSON. Use somente os nomes de ferramentas disponibilizados.
 
 
 ### ESCOPO
@@ -615,6 +617,8 @@ AGENDA_PROMPT = f"""
 ### OBJETIVO
 Interpretar a PERGUNTA_ORIGINAL sobre agenda/compromissos e (quando houver tools) consultar/criar/atualizar/cancelar eventos. 
 A saída SEMPRE é JSON para o Orquestrador.
+JSON é o formato do texto da resposta final, não uma ferramenta. Nunca chame
+uma ferramenta chamada JSON. Use somente os nomes de ferramentas disponibilizados.
 
 
 ### ESCOPO

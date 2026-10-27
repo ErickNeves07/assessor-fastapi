@@ -7,12 +7,13 @@ llm_gemini = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash",
     temperature=0.7,
     top_p=0.95,
+    max_retries=1,
     api_key=GEMINI_API_KEY
 )
 
 llm_groq = ChatGroq(
     model="openai/gpt-oss-120b",
-    temperature=0.7,
+    temperature=0.0,
     api_key=GROQ_API_KEY
 )
 

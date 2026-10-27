@@ -1,10 +1,29 @@
 from typing import Optional, List
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from langchain.tools import tool
 from pydantic import BaseModel, Field
 
 # A conexão com o Postgres agora vem de um lugar só (antes era uma get_conn()
 # local, idêntica à de financeiro.py).
 from app.tools.db import get_conn
+
+
+FUSO_AGENDA = ZoneInfo("America/Sao_Paulo")
+
+
+def _formatar_horarios(inicio: datetime, fim: Optional[datetime]) -> dict:
+    inicio_local = inicio.astimezone(FUSO_AGENDA)
+    fim_local = fim.astimezone(FUSO_AGENDA) if fim else None
+    return {
+        "start_time": inicio_local.isoformat(),
+        "end_time": fim_local.isoformat() if fim_local else None,
+        "data_local": inicio_local.strftime("%d/%m/%Y"),
+        "hora_inicio_local": inicio_local.strftime("%H:%M"),
+        "data_fim_local": fim_local.strftime("%d/%m/%Y") if fim_local else None,
+        "hora_fim_local": fim_local.strftime("%H:%M") if fim_local else None,
+        "fuso_horario": "America/Sao_Paulo",
+    }
 
 
 class AddEventArgs(BaseModel):
@@ -48,8 +67,7 @@ def add_event(
             "status": "ok",
             "id": new_id,
             "title": title,
-            "start_time": str(start),
-            "end_time": str(end) if end else None,
+            **_formatar_horarios(start, end),
         }
     except Exception as e:
         conn.rollback()
@@ -156,8 +174,7 @@ def query_events(
             results.append({
                 "id": r[0],
                 "title": r[1],
-                "start_time": str(r[2]),
-                "end_time": str(r[3]) if r[3] else None,
+                **_formatar_horarios(r[2], r[3]),
                 "location": r[4],
                 "notes": r[5],
                 "source_text": r[6],

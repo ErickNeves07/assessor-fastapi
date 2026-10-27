@@ -25,6 +25,12 @@ REGRAS = (
     "Moeda trocada, valores de moedas diferentes somados num total só, "
     "opinião dita como fato do sistema, número, data, telefone ou regra "
     "que não saiam da evidência contam como sem_apoio."
+    " Horários com offsets diferentes podem representar o mesmo instante: "
+    "12:30:00+00:00 equivale a 09:30:00-03:00, e 13:30:00+00:00 equivale a 10:30:00-03:00. "
+    "Ao avaliar agenda, compare o instante, não apenas os dígitos da hora. "
+    "Se query_events retornou evento no intervalo pedido, informar conflito é apoiado. "
+    "Pedir outro horário e oferecer consultar alternativas são próximos passos, "
+    "não afirmações de disponibilidade."
 )
 
 

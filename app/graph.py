@@ -5,11 +5,14 @@ from langgraph.types import RunnableConfig
 from langchain_core.messages import RemoveMessage
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import MemorySaver
+from app.memory import salvar_mensagem
+from app.observabilidade import abrir_turno, fechar_turno, status_do_estado
 
 from app.tools.memoria import TOOLS_MEMORIA
 from app.tools.financeiro import TOOLS
 from app.tools.perfil import TOOLS_PERFIL
 from app.tools.faq import FAQ_TOOLS
+from app.tools.agenda import TOOLS_AGENDA
 from app.prompts import (
     ROUTER_PROMPT_COMPLETO,
     FINANCEIRO_PROMPT_COMPLETO,
@@ -20,6 +23,8 @@ from app.prompts import (
 from app.guardrail import anonimizar_entrada, guardrail_entrada, guardrail_saida
 from app.llms import llm_rapido, llm_especialista
 from app.memory import salvar_mensagem
+
+from app.juiz import no_juiz
 
 # ==============================================================================
 # MODELOS E AGENTES  (sem checkpointer — a memória fica no grafo)
@@ -39,7 +44,7 @@ financeiro_app = create_agent(
 
 agenda_app = create_agent(
     model=llm_especialista,
-    tools=TOOLS_MEMORIA,
+    tools=TOOLS_MEMORIA + TOOLS_AGENDA,
     system_prompt=AGENDA_PROMPT_COMPLETO,
 )
 
@@ -96,14 +101,14 @@ def no_roteador(estado: Estado, config: RunnableConfig) -> dict:
         # Não adiciona nada ao messages — especialista lê histórico limpo
     }
 
-def no_orquestrador(estado: Estado) -> dict:
+def no_orquestrador(estado: Estado, config: RunnableConfig) -> dict:
     ultima_especialista = ""
     for mensagem in reversed(estado["messages"]):
         if mensagem.type == "ai" and mensagem.content:
             ultima_especialista = mensagem.content
             break
 
-    saida = orquestrador_app.invoke({"messages": [{"role": "human", "content": ultima_especialista}]})
+    saida = orquestrador_app.invoke({"messages": [{"role": "human", "content": ultima_especialista}]}, config=config)
 
     return {
         "agentes_chamados": [estado["rota"], "orquestrador"],
@@ -166,6 +171,8 @@ grafo.add_node("faq",          faq_app)
 grafo.add_node("orquestrador", no_orquestrador)
 grafo.add_node("guardrail_saida",       no_guardrail_saida)
 
+grafo.add_node("juiz", no_juiz)
+
 grafo.set_entry_point("guardrail_entrada")
 grafo.add_conditional_edges(
     "guardrail_entrada",
@@ -190,8 +197,9 @@ grafo.add_conditional_edges(
 grafo.add_edge("financeiro",   "orquestrador")
 grafo.add_edge("agenda",       "orquestrador")
 grafo.add_edge("orquestrador", "guardrail_saida")
-grafo.add_edge("guardrail_saida", END)
-grafo.add_edge("faq",          END)   # FAQ bypassa o orquestrador
+grafo.add_edge("guardrail_saida", "juiz")
+grafo.add_edge("faq",             "juiz")
+grafo.add_edge("juiz",            END)
 
 # Memória centralizada no grafo — persiste o Estado inteiro entre turns
 memory = MemorySaver()
@@ -210,12 +218,22 @@ def executar_fluxo_assessor(pergunta_usuario: str, session_id: str, user_id: str
         "user_id":          user_id
     }
 
-    estado_final = fluxo_agentes.invoke(
-        estado_inicial,
-        config={"configurable": {"thread_id": session_id, "user_id": user_id}}
-    )
-    resposta = estado_final["messages"][-1].text
+    turno_id = abrir_turno()
+    status = "erro"
+    rota = ""
 
-    salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
+    try:
+        estado_final = fluxo_agentes.invoke(
+            estado_inicial,
+            config={"configurable": {"thread_id": session_id, "user_id": user_id}}
+        )
+        resposta = estado_final["messages"][-1].text
 
-    return resposta
+        salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
+
+        status = status_do_estado(estado_final)
+        rota = estado_final.get("rota") or ""
+
+        return resposta
+    finally:
+        fechar_turno(turno_id, session_id=session_id, rota=rota, status=status)

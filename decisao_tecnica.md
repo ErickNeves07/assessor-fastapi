@@ -1,6 +1,8 @@
-# Juiz tardio e conversão para reais — decisão técnica
+# Juiz tardio e conversão para reais — decisão técnica e entrega final
 
 Branch: `feat/juiz-tardio`. Implementação da prática livre da Etapa 8, sem wrappers e sem novo agente.
+
+**Fechamento em 29/10/2026:** este arquivo é a entrega na raiz exigida pelo HTML `pratica_juiz_tardio.zip`. A seção 13 consolida os últimos testes, o estado final do código, as limitações e a correspondência com os cinco itens da atividade. As seções anteriores preservam a decisão e as coletas anteriores; não se confundem seus resultados com os ajustes finais ainda não testados.
 
 ## 1. Problema, evidências anteriores e objetivo
 
@@ -270,6 +272,7 @@ A coleta anterior foi feita antes do ajuste pontual de fuso. Compará-la diretam
 | `docs/metricas_depois.json` | Cinco pedidos reais posteriores, respostas, planos, vereditos, consultas e métricas |
 | `docs/validacao_controlada.json` | Nove cenários com marcador e estados antes/depois nas três tools antigas e novas; SQL isolado, juiz/Google simulados |
 | `docs/RELATORIO_VALIDACAO_DEPOIS.md` | Comparação real, problemas encontrados, cobertura e próximos testes mínimos |
+| `docs/metricas_reteste_final.json` | Últimos três pedidos reais, resposta, plano, juiz, banco, métricas cumulativas e confirmação Google somente por leitura |
 | `decisao_tecnica.md` | Este registro de decisão, evidências, alternativas, arquivos e testes |
 
 ## 11. Arquivos modificados
@@ -283,6 +286,7 @@ A coleta anterior foi feita antes do ajuste pontual de fuso. Compará-la diretam
 | `app/juiz.py` | Veredito explícito ligado ao plano, regras de preparo/projeção/conversão, falha fechada e evidência sem corte silencioso |
 | `app/mcp_server.py` | Manter ferramentas financeiras independentes funcionais com preparo, juiz e executor; corrigir data do saldo diário |
 | `app/observabilidade.py` | Distinguir erro técnico explícito mesmo quando a resposta ao usuário é tratada |
+| `app/tools/db.py` | Interpretar datas sem offset em São Paulo; correção anterior ao adiamento, preservada em commit próprio |
 | `app/prompts.py` | Contratos de preparado, sequência, moeda, vários eventos e rascunho condicionado |
 | `requirements.txt` | Fixar a biblioteca CurrencyConverter |
 | `README.md` | Explicar o comportamento implementado, dependência, testes isolados e exportação |
@@ -310,3 +314,74 @@ Os testes SQL criam um schema de nome aleatório `test_juiz_...`, sem modificar 
 - [CurrencyConverter — dados, datas e Decimal](https://pypi.org/project/CurrencyConverter/)
 - [Google Calendar — criação e identificadores](https://developers.google.com/workspace/calendar/api/guides/create-events)
 - [Google Calendar MCP — contrato create_event](https://developers.google.com/workspace/calendar/api/v3/reference/mcp/tools_list/create_event)
+
+## 13. Fechamento da entrega e última coleta real
+
+### Resultado dos três últimos pedidos
+
+A segunda coleta posterior está em [docs/metricas_reteste_final.json](docs/metricas_reteste_final.json). Foram lidos monitor, traces, Mongo e Postgres; a confirmação dos eventos Google foi uma consulta de leitura, sem criar ou alterar eventos. Nenhum pedido de negócio foi reenviado por essa coleta.
+
+| Marcador/pedido | Plano e juiz | Estado posterior | Conclusão |
+|---|---|---|---|
+| UPDATE ID 24, `DEPOIS-CALCA`, de 30 para 35 | UPDATE preparado; `sem_apoio`, 0,49 | ID 24 permaneceu em 30,00; usuário recebeu frase segura | Recusa real de UPDATE sem efeito comprovada |
+| INSERT `DEPOIS-CAMBIO-RETESTE`, 10 USD em 28/10 | Conversão preparada para 53,27 BRL, taxa 5,327135542980328752357855026 da data; `sem_apoio`, 0,61 | Nenhuma linha com esse marcador; frase segura | Conversão e recusa real de INSERT sem efeito comprovadas; não houve commit dessa conversão |
+| `DEPOIS-AGENDA-A` e `DEPOIS-AGENDA-B` | Dois eventos e duas intenções Google; `apoiada`, 0,91 | Eventos locais IDs 7 e 8 e ambos confirmados no Google | Agenda aprovada com criação única dos dois itens comprovada; resposta textual ainda inadequada na versão medida |
+
+Horários confirmados: A em 10/11/2026, 20h–21h; B em 11/11/2026, 20h–21h, São Paulo. A leitura Google retornou HTTP 200 e IDs `jeupaimtbc7jorifot9sqsfmvo` e `6oco9q3c513uvhif20rg2vs2h8`, respectivamente. Esses identificadores são evidência de eventos, não credenciais.
+
+No pedido de agenda, a resposta registrada no Mongo foi: “Eventos DEPOIS-AGENDA-A e DEPOIS-AGENDA-B foram preparados e aguardam confirmação”, seguida de recomendação de aguardar. Isso estava incorreto após os commits: não existia fila ou confirmação adicional. O problema de redação foi registrado, sem apresentar a execução como integralmente correta.
+
+### Ajuste final autorizado, sem executar novos testes
+
+Foram alteradas somente orientações textuais existentes, sem agente ou nó novo:
+
+- `app/prompts.py`: o orquestrador deve escrever o rascunho como mensagem de sucesso já concluído, que o código publica apenas após confirmação. Foram excluídas orientações ambíguas de “aguardar confirmação”, “será criado” e recomendação de registrar novamente o que já está no plano. Se a execução falhar, o executor continua substituindo o rascunho pelo erro/parcial.
+- `app/juiz.py`: esclarece que verbos no passado pertencem ao resultado hipotético do plano aprovado; não exigem gravação anterior ao veredito. Explica também que o `source_text` de um lançamento atualizado pode preservar o valor original, sem contradizer o novo registro proposto.
+
+O limiar continua 0,55, `choice=apoiada` continua obrigatório e nenhum veredito foi forçado. Não se conhece a justificativa específica das recusas do JEV, pois o contrato retorna choice/score, sem explicação textual. O ajuste reduz ambiguidades, mas não constitui prova de que toda recusa indevida foi resolvida.
+
+**Não foram executados testes depois desse ajuste final, por pedido expresso do usuário.** Os 39 testes automatizados e os nove cenários controlados aprovados pertencem à implementação anterior a esse ajuste. As métricas abaixo também foram medidas antes dele. A validação final da redação e da aceitação do modelo permanece pendente.
+
+### Métricas finais: janelas separadas
+
+O monitor é cumulativo no processo: a última captura contém os cinco primeiros pedidos posteriores mais os três últimos. Não somar a captura de cinco com a de oito.
+
+| Indicador | Antes: 7 turnos | Primeiro lote depois: 5 | Segundo lote isolado: 3 | Depois cumulativo: 8 |
+|---|---:|---:|---:|---:|
+| Latência média | 27,476 s | 68,085 s | 72,370 s | 69,692 s |
+| P95 | 77,129 s | 115,512 s | 170,056 s | 170,056 s |
+| Erro técnico no monitor | 0% | 40% | 0% | 25% |
+| Tokens totais registrados | 167.730 | 93.371 | 59.686 | 153.057 |
+| Custo estimado registrado | US$ 0,062414 | US$ 0,026932 | US$ 0,011812 | US$ 0,038744 |
+| Fallbacks registrados | 3 | 5 | 8 | 13 |
+
+Os três últimos turnos têm status técnico `ok`: duas recusas legítimas segundo o contrato e um pedido de agenda executado. Isso não significa três tarefas funcionais bem-sucedidas. No total posterior, há três recusas financeiras reais sem efeito: camiseta, UPDATE da calça e câmbio do reteste. O monitor tem seis `ok`, dois `erro` e zero `bloqueado`.
+
+O p95 de 170,056 s supera o SLO de 8 s, e a taxa de 25% supera o SLO de 5%. O total de tokens/custo caiu em relação à linha de base, mas não se atribui isso a ganho de eficiência: amostras, resultados, recusas e modelos/fallbacks diferem. As quotas Gemini/Groq e as chamadas repetidas aumentaram a espera. JEV não tem tokens/custo contabilizados nesse coletor, e chamadas falhas não têm contabilização completa. O caso lento de agenda foi funcionalmente confirmado em dois destinos apesar da latência alta.
+
+### Evidências da invariável nas três tools
+
+| Tool | Antes: recusa com efeito | Depois: recusa sem efeito | Depois: aprovação uma única vez |
+|---|---|---|---|
+| `add_transaction` | Bateria real ANTES-CAMISETA/ANTES-CAMBIO e controle isolado | Camiseta e câmbio reteste reais, além do controle | Calça ID 24 real, além do controle |
+| `update_transaction` | ANTES-CAMISETA real e controle isolado | ID 24 recusado e preservado em 30; controle isolado | Controle SQL isolado; não houve aprovação real de UPDATE nessa bateria |
+| `add_event` | Controle SQL isolado da tool antiga; não houve recusa real anterior de agenda capturada | Controle SQL isolado, com nenhuma chamada Google | Eventos reais IDs 7/8 e Google, além do controle |
+
+Os [nove cenários controlados](docs/validacao_controlada.json) contêm marcador único, estado antes, retorno da tool, estado antes do juiz, rótulo/veredito e estado depois. Usaram as tools antigas extraídas do ZIP preservado e as atuais, com SQL real em schema temporário; juiz e Google foram simulados para controlar aprovação/recusa. O schema foi removido e as tabelas de negócio existentes não foram alteradas. A repetição do mesmo plano aprovado foi bloqueada e não gerou segundo efeito. Isso não equivale a idempotência de um novo POST.
+
+Há evidência técnica das três tools, com distinção explícita entre controle e produção. Permanecem sem sucesso real capturado: UPDATE aprovado de registro existente e conversão seguida de commit. Não se deve afirmar cobertura integral de ponta a ponta ou desempenho dentro dos SLOs. Não é necessário recriar os eventos para provar o que já foi confirmado; repetir o pedido cria risco de conflito/duplicação.
+
+### Conferência dos requisitos do HTML
+
+| Item exigido | Onde está atendido |
+|---|---|
+| Cópia inicial e evidência do defeito | ZIP de baseline preservado fora do Git, seção 1, dados ANTES e controle antigo das três tools |
+| 1. Decisão, fronteira, três tools e fluxo antes/depois | Seções 1–4 e tabela de evidências desta seção |
+| 2. Alternativas com mecanismo, benefício, custo e motivo | Seção 5: interceptar, wrappers, adiar, transação longa, provisório, compensar, outbox e demais caminhos |
+| 3. SRE da solução e de alternativas, SLOs e classificação | Seções 7, 9 e métricas finais desta seção; inclui limites de atribuição e custos não contabilizados |
+| 4. Google, Mongo, juiz sem resposta, queda, repetição e evidências | Seções 3 e 6; tabela das três tools; traces/dados reais e controle com marcadores |
+| 5. Caminhos de todos os arquivos criados/modificados e motivos | Seções 10–11, incluindo documentos, testes e correções anteriores |
+| Manter o contrato e demais fluxos | Mesmas rotas/API, leituras, guardrails, juiz e monitor; nenhum agente novo, nenhuma exclusão manual para esconder efeito |
+| Não expor segredos | Credenciais, tokens, `.env` e URLs com senha não entram nos artefatos versionados |
+
+Não foi usado o HTML como autorização para realizar ações fora do pedido. Ele foi tratado como especificação de entrega, subordinado às decisões do usuário registradas aqui.

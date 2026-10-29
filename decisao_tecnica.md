@@ -1,3 +1,11 @@
+## Escopo da atividade e ajustes gerais
+
+O trabalho da atividade é corrigir a ordem entre o veredito do juiz e a escrita: preparar as operações, avaliar o turno e executar somente depois da aprovação. Fazem parte dessa solução o plano por turno, as consultas que respeitam a ordem do pedido, o executor e a confirmação dos resultados no financeiro e na agenda. Incluímos o Google nessa mesma regra.
+
+Também corrigimos problemas do funcionamento que o projeto já tinha. O fuso horário do banco, o histórico enviado ao roteador, o limiar de 0,55 e a data do saldo diário no MCP são **ajustes gerais de manutenção**, não a solução do juiz tardio. Eles aparecem neste documento para explicar o conjunto de mudanças da branch, mas não devem ser considerados a contribuição principal da atividade.
+
+A conversão de moedas é uma melhoria adicional que decidimos fazer em paralelo. Ela corrige o tratamento do valor antes de preparar a operação; a garantia exigida pela atividade continua sendo impedir a gravação de um turno recusado, independentemente da moeda.
+
 ## 1. O problema encontrado
 
 O problema era a ordem das etapas: `add_transaction`, `update_transaction` e `add_event` faziam o `commit` antes de o juiz avaliar a resposta. Quando ele recusava o turno, o banco já tinha sido alterado.
@@ -273,6 +281,8 @@ A coleta anterior foi feita antes do ajuste pontual de fuso. Compará-la diretam
 
 ## 11. Arquivos modificados
 
+A tabela reúne tanto a implementação da atividade quanto a manutenção feita no mesmo período. Alguns arquivos, como `app/graph.py`, `app/juiz.py` e `app/prompts.py`, receberam os dois tipos de alteração. Os commits abaixo separam as correções gerais da implementação do adiamento.
+
 | Arquivo | Motivo |
 |---|---|
 | `app/tools/financeiro.py` | Substituir INSERT/UPDATE imediatos por preparo; projeções SQL, Decimal, moeda e referências temporárias |
@@ -287,11 +297,15 @@ A coleta anterior foi feita antes do ajuste pontual de fuso. Compará-la diretam
 | `requirements.txt` | Fixar a biblioteca CurrencyConverter |
 | `README.md` | Explicar o comportamento implementado, dependência, testes isolados e exportação |
 
-Correções anteriores preservadas em commits próprios na mesma branch:
+### Correções gerais, independentes da atividade
+
+Essas mudanças recuperam ou ajustam comportamentos existentes. Nenhuma delas, isoladamente, impede uma gravação anterior ao veredito:
 
 - `41dbf01`: `app/graph.py` e `app/prompts.py`, isolamento do contexto técnico no roteador e ferramenta única de histórico.
 - `6e04fe8`: `app/juiz.py` e `README.md`, limiar 0,55 conforme definido para o projeto.
 - `a1a05a7`: `app/tools/db.py`, conexão São Paulo para datas sem offset; não altera dados antigos.
+
+A correção da data do saldo diário em `app/mcp_server.py` também é manutenção. Já a adaptação das escritas desse servidor para usar preparo, juiz e executor pertence à atividade, pois evita deixar outro caminho de gravação fora da proteção.
 
 Rotas, esquema público de chat, tabelas de negócio, telas, FAQ, cadastro de perfil e autenticação Google não foram redesenhados. Não foram versionados `.env`, JSON OAuth, tokens ou URLs com senha. A cópia inicial do código e os registros brutos de coleta permaneceram fora do repositório.
 

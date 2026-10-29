@@ -2,6 +2,8 @@
 
 ## O que verificamos
 
+O foco da atividade é a escrita condicionada ao juiz. Os testes também passaram por correções gerais do projeto, como fuso horário, contexto do roteador e limiar de aprovação, além da conversão de moedas feita em paralelo. Esses ajustes ajudam o funcionamento existente, mas a evidência principal da atividade é o banco permanecer inalterado quando o turno é recusado e confirmar a operação uma única vez quando aprovado.
+
 Fizemos oito pedidos manuais, divididos em duas baterias, e conferimos as respostas no Mongo, os vereditos nos traces e os registros no Postgres. Também consultamos o Google Calendar para confirmar os dois eventos criados.
 
 A principal mudança funcionou nos casos de recusa: a camiseta não foi inserida, a calça manteve o valor anterior e a compra em dólares não foi gravada. Na agenda, os dois eventos aprovados foram criados tanto no banco quanto no Google.

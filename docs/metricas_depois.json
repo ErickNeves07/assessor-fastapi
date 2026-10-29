@@ -1,0 +1,530 @@
+{
+  "coletado_em_utc": "2026-10-29T15:41:58.331175+00:00",
+  "commit": "cc5b915d097396d5c40f40fda2e0b1de2efe5e7b",
+  "monitor_resumo": {
+    "turnos": 5,
+    "em_andamento": 0,
+    "no_ar_segundos": 1068,
+    "taxa_erro": 0.4,
+    "bloqueios": 0,
+    "latencia_media_ms": 68085,
+    "latencia_p95_ms": 115512,
+    "slo_ok": false,
+    "tokens_entrada": 85580,
+    "tokens_saida": 7791,
+    "tokens_total": 93371,
+    "custo_usd": 0.026932,
+    "modelo_mais_usado": "openai/gpt-oss-120b",
+    "fallbacks": 5
+  },
+  "por_modelo": [
+    {
+      "modelo": "gemini-2.5-flash",
+      "chamadas": 7,
+      "tokens_entrada": 37421,
+      "tokens_saida": 2004,
+      "custo_usd": 0.016236,
+      "latencia_media_ms": 2159
+    },
+    {
+      "modelo": "openai/gpt-oss-120b",
+      "chamadas": 20,
+      "tokens_entrada": 48159,
+      "tokens_saida": 5787,
+      "custo_usd": 0.010696,
+      "latencia_media_ms": 12200
+    }
+  ],
+  "comparacoes": {
+    "latencia_media_ms": {
+      "antes": 27476,
+      "depois": 68085,
+      "variacao_percentual": 147.79807832289998
+    },
+    "latencia_p95_ms": {
+      "antes": 77129,
+      "depois": 115512,
+      "variacao_percentual": 49.76467995176912
+    },
+    "tokens_total_por_turno": {
+      "antes": 23961.428571428572,
+      "depois": 18674.2,
+      "variacao_percentual": -22.06558158945925
+    },
+    "custo_usd_por_turno": {
+      "antes": 0.008916285714285713,
+      "depois": 0.0053864,
+      "variacao_percentual": -39.58919473195115
+    }
+  },
+  "llm_tentativas": 35,
+  "llm_sucessos": 27,
+  "llm_erros": 8,
+  "testes": [
+    {
+      "cenario": 1,
+      "pergunta": "Registre uma compra de camiseta de 15 reais em 29/10/2026, com descrição DEPOIS-CAMISETA, e depois liste todas as transações desse dia.",
+      "resposta_mongo": "Não tenho evidência para afirmar isso.",
+      "resposta_orquestrador": [
+        {
+          "content": "- Lancei R$ 15,00 em “outros” em 29/10/2026 com a descrição “DEPOIS-CAMISETA”.\n- *Recomendação*:\n  - Transação em 29/10/2026: R$ 15,00 – DEPOIS-CAMISETA (despesa, projetado).",
+          "role": "assistant"
+        }
+      ],
+      "veredito": {
+        "aprovado": false,
+        "hash_plano": "291c70dbd2f99d880bcb47abbf48f27ef90b371be67431bb5ff77df33e35027c",
+        "motivo": "sem_apoio noul=0.79",
+        "tecnico": false,
+        "turno_id": "a41e1624894d4907b330a451070ed5ae"
+      },
+      "plano_avaliado": {
+        "erros": [],
+        "hash": "291c70dbd2f99d880bcb47abbf48f27ef90b371be67431bb5ff77df33e35027c",
+        "operacoes": [
+          {
+            "antes": null,
+            "conversao": null,
+            "dados": {
+              "registro": {
+                "amount": "15.00",
+                "category_id": 24,
+                "description": "DEPOIS-CAMISETA",
+                "id": null,
+                "occurred_at": "2026-10-29T00:00:00-03:00",
+                "payment_method": null,
+                "source_text": "Registre uma compra de camiseta de 15 reais em 29/10/2026, com descrição DEPOIS-CAMISETA, e depois liste todas as transações desse dia.",
+                "type": 2
+              }
+            },
+            "referencia": "op-1",
+            "tipo": "add_transaction"
+          }
+        ],
+        "passos": [
+          {
+            "operacao": "op-1",
+            "sequencia": 1
+          },
+          {
+            "apos_operacoes": [
+              "op-1"
+            ],
+            "argumentos": {
+              "date_from_local": "2026-10-29",
+              "date_to_local": "2026-10-29",
+              "limit": 50,
+              "search_text": null,
+              "type_name": null
+            },
+            "consulta": "query_transactions",
+            "resultado": {
+              "count": 1,
+              "projecao": true,
+              "status": "ok",
+              "transactions": [
+                {
+                  "amount": "15.00",
+                  "currency": "BRL",
+                  "description": "DEPOIS-CAMISETA",
+                  "id": null,
+                  "occurred_at_local": "2026-10-29T00:00:00",
+                  "payment_method": null,
+                  "projetado": true,
+                  "referencia_temporaria": "op-1",
+                  "source_text": "Registre uma compra de camiseta de 15 reais em 29/10/2026, com descrição DEPOIS-CAMISETA, e depois liste todas as transações desse dia.",
+                  "type_name": "EXPENSES"
+                }
+              ]
+            },
+            "sequencia": 2
+          }
+        ],
+        "turno_id": "a41e1624894d4907b330a451070ed5ae"
+      },
+      "metricas": {
+        "hora": "12:26:49",
+        "latencia_ms": 19270,
+        "rota": "financeiro",
+        "status": "ok",
+        "tokens_total": 21572,
+        "custo_usd": 0.008069
+      },
+      "modelos_tentativas": 7,
+      "modelos_erros": 0,
+      "tools": [
+        {
+          "nome": "add_transaction",
+          "argumentos": {
+            "input": "{'source_text': 'Registre uma compra de camiseta de 15 reais em 29/10/2026, com descrição DEPOIS-CAMISETA, e depois liste todas as transações desse dia.', 'currency': 'BRL', 'type_name': 'EXPENSES', 'category_name': 'outros', 'occurred_at': '2026-10-29', 'amount': 15, 'description': 'DEPOIS-CAMISETA'}"
+          },
+          "resultado": {
+            "output": {
+              "additional_kwargs": {},
+              "content": "{\"status\": \"preparado\", \"referencia_temporaria\": \"op-1\", \"operacao\": \"add_transaction\", \"dados\": {\"registro\": {\"id\": null, \"amount\": \"15.00\", \"type\": 2, \"category_id\": 24, \"description\": \"DEPOIS-CAMISETA\", \"payment_method\": null, \"occurred_at\": \"2026-10-29T00:00:00-03:00\", \"source_text\": \"Registre uma compra de camiseta de 15 reais em 29/10/2026, com descrição DEPOIS-CAMISETA, e depois liste todas as transações desse dia.\"}}, \"persistido\": false}",
+              "name": "add_transaction",
+              "response_metadata": {},
+              "status": "success",
+              "tool_call_id": "51ee8185-37e0-4705-a058-f4dab9b98c56",
+              "type": "tool"
+            }
+          },
+          "inicio_utc": "2026-10-29T15:26:36.013692+00:00"
+        },
+        {
+          "nome": "query_transactions",
+          "argumentos": {
+            "input": "{'date_from_local': '2026-10-29', 'date_to_local': '2026-10-29'}"
+          },
+          "resultado": {
+            "output": {
+              "additional_kwargs": {},
+              "content": "{\"status\": \"ok\", \"count\": 1, \"transactions\": [{\"id\": null, \"amount\": \"15.00\", \"type_name\": \"EXPENSES\", \"description\": \"DEPOIS-CAMISETA\", \"payment_method\": null, \"occurred_at_local\": \"2026-10-29T00:00:00\", \"source_text\": \"Registre uma compra de camiseta de 15 reais em 29/10/2026, com descrição DEPOIS-CAMISETA, e depois liste todas as transações desse dia.\", \"referencia_temporaria\": \"op-1\", \"projetado\": true, \"currency\": \"BRL\"}], \"projecao\": true}",
+              "name": "query_transactions",
+              "response_metadata": {},
+              "status": "success",
+              "tool_call_id": "63f0c4e1-6e6f-41c6-a063-e76f73d5239c",
+              "type": "tool"
+            }
+          },
+          "inicio_utc": "2026-10-29T15:26:41.799056+00:00"
+        }
+      ],
+      "conclusao": "Recusa real sem INSERT: plano e consulta projetada corretos; juiz choice sem_apoio, noul 0.79; camiseta ausente do banco. O limiar 0.55 não foi o motivo da recusa. JEV não fornece justificativa textual nesse contrato.",
+      "status_http_observado": null,
+      "status_http_previsto_pela_rota": 200
+    },
+    {
+      "cenario": 2,
+      "pergunta": "Altere o valor da compra DEPOIS-CAMISETA de 29/10/2026 para 18 reais.",
+      "resposta_mongo": "Não foi possível preparar todas as operações. Nenhuma transação encontrada para os filtros fornecidos.",
+      "resposta_orquestrador": [
+        {
+          "content": "- Não foi possível localizar a transação “DEPOIS-CAMISETA” de 29/10/2026 para alterar o valor.  \n- *Recomendação*: Verifique se a descrição e a data estão corretas ou informe o ID da transação para que a alteração seja feita.",
+          "role": "assistant"
+        }
+      ],
+      "veredito": {
+        "aprovado": true,
+        "hash_plano": "fc3a5151854f5a0fc755c7f08854db5c0ca77dae0569dc439add15227675838f",
+        "motivo": "apoiada noul=0.92",
+        "tecnico": false,
+        "turno_id": "737ba77541b14a72a62eb0448e8357de"
+      },
+      "plano_avaliado": {
+        "erros": [
+          {
+            "mensagem": "Nenhuma transação encontrada para os filtros fornecidos.",
+            "tecnico": false
+          },
+          {
+            "mensagem": "Nenhuma transação encontrada para os filtros fornecidos.",
+            "tecnico": false
+          },
+          {
+            "mensagem": "Informe ID, referência temporária ou descrição e data local.",
+            "tecnico": false
+          },
+          {
+            "mensagem": "Informe ID, referência temporária ou descrição e data local.",
+            "tecnico": false
+          }
+        ],
+        "hash": "fc3a5151854f5a0fc755c7f08854db5c0ca77dae0569dc439add15227675838f",
+        "operacoes": [],
+        "passos": [],
+        "turno_id": "737ba77541b14a72a62eb0448e8357de"
+      },
+      "metricas": {
+        "hora": "12:28:30",
+        "latencia_ms": 91559,
+        "rota": "financeiro",
+        "status": "ok",
+        "tokens_total": 35001,
+        "custo_usd": 0.010782
+      },
+      "modelos_tentativas": 11,
+      "modelos_erros": 2,
+      "tools": [
+        {
+          "nome": "update_transaction",
+          "argumentos": {
+            "input": "{'amount': '18', 'currency': 'BRL', 'date_local': '2026-10-29', 'match_text': 'DEPOIS-CAMISETA'}"
+          },
+          "resultado": {
+            "output": {
+              "additional_kwargs": {},
+              "content": "{\"status\": \"error\", \"message\": \"Nenhuma transação encontrada para os filtros fornecidos.\"}",
+              "name": "update_transaction",
+              "response_metadata": {},
+              "status": "success",
+              "tool_call_id": "2982972d-0884-4290-8a06-33b0d07dc7e2",
+              "type": "tool"
+            }
+          },
+          "inicio_utc": "2026-10-29T15:27:02.532185+00:00"
+        },
+        {
+          "nome": "update_transaction",
+          "argumentos": {
+            "input": "{'amount': '18', 'currency': 'BRL', 'referencia_temporaria': 'op-1'}"
+          },
+          "resultado": {
+            "output": {
+              "additional_kwargs": {},
+              "content": "{\"status\": \"error\", \"message\": \"Nenhuma transação encontrada para os filtros fornecidos.\"}",
+              "name": "update_transaction",
+              "response_metadata": {},
+              "status": "success",
+              "tool_call_id": "246568c1-d357-4200-a77e-c948635de9b9",
+              "type": "tool"
+            }
+          },
+          "inicio_utc": "2026-10-29T15:27:06.177417+00:00"
+        },
+        {
+          "nome": "update_transaction",
+          "argumentos": {
+            "input": "{'amount': '18', 'currency': 'BRL', 'date_local': '2026-10-29', 'description': 'DEPOIS-CAMISETA'}"
+          },
+          "resultado": {
+            "output": {
+              "additional_kwargs": {},
+              "content": "{\"status\": \"error\", \"message\": \"Informe ID, referência temporária ou descrição e data local.\"}",
+              "name": "update_transaction",
+              "response_metadata": {},
+              "status": "success",
+              "tool_call_id": "fc_52459055-4c48-4d9d-9402-5edd5d9551b3",
+              "type": "tool"
+            }
+          },
+          "inicio_utc": "2026-10-29T15:27:29.668888+00:00"
+        },
+        {
+          "nome": "update_transaction",
+          "argumentos": {
+            "input": "{'currency': 'BRL', 'amount': '18', 'description': 'DEPOIS-CAMISETA', 'date_local': '2026-10-29'}"
+          },
+          "resultado": {
+            "output": {
+              "additional_kwargs": {},
+              "content": "{\"status\": \"error\", \"message\": \"Informe ID, referência temporária ou descrição e data local.\"}",
+              "name": "update_transaction",
+              "response_metadata": {},
+              "status": "success",
+              "tool_call_id": "8b58383e-c1b3-4a67-9edb-2330640ac173",
+              "type": "tool"
+            }
+          },
+          "inicio_utc": "2026-10-29T15:27:33.131645+00:00"
+        }
+      ],
+      "conclusao": "Atualização não executada porque a camiseta recusada não existe. Não valida UPDATE de uma linha existente. Houve quatro tentativas de tool, incluindo referência temporária antiga, sem reutilização efetiva do plano anterior.",
+      "status_http_observado": null,
+      "status_http_previsto_pela_rota": 200
+    },
+    {
+      "cenario": 3,
+      "pergunta": "Primeiro liste todas as transações de 29/10/2026 e só depois registre uma compra de calça de 30 reais nesse dia, com descrição DEPOIS-CALCA.",
+      "resposta_mongo": "- Não há transações registradas para 29/10/2026.  \n- *Recomendação*: registrar a compra de calça de R$ 30,00 com a descrição “DEPOIS-CALCA” para a mesma data.",
+      "resposta_orquestrador": [
+        {
+          "content": "- Não há transações registradas para 29/10/2026.  \n- *Recomendação*: registrar a compra de calça de R$ 30,00 com a descrição “DEPOIS-CALCA” para a mesma data.",
+          "role": "assistant"
+        }
+      ],
+      "veredito": {
+        "aprovado": true,
+        "hash_plano": "7aeb1f26f72916be1e9a9d8d4cea0546f7fdbeb965fd870f6736c15e125d1f3a",
+        "motivo": "apoiada noul=0.92",
+        "tecnico": false,
+        "turno_id": "01bca67caff44b8cb8e23644065073e7"
+      },
+      "plano_avaliado": {
+        "erros": [],
+        "hash": "7aeb1f26f72916be1e9a9d8d4cea0546f7fdbeb965fd870f6736c15e125d1f3a",
+        "operacoes": [
+          {
+            "antes": null,
+            "conversao": null,
+            "dados": {
+              "registro": {
+                "amount": "30.00",
+                "category_id": 24,
+                "description": "DEPOIS-CALCA",
+                "id": null,
+                "occurred_at": "2026-10-29T00:00:00-03:00",
+                "payment_method": null,
+                "source_text": "Primeiro liste todas as transações de 29/10/2026 e só depois registre uma compra de calça de 30 reais nesse dia, com descrição DEPOIS-CALCA.",
+                "type": 2
+              }
+            },
+            "referencia": "op-1",
+            "tipo": "add_transaction"
+          }
+        ],
+        "passos": [
+          {
+            "apos_operacoes": [],
+            "argumentos": {
+              "date_from_local": "2026-10-29",
+              "date_to_local": "2026-10-29",
+              "limit": 50,
+              "search_text": null,
+              "type_name": null
+            },
+            "consulta": "query_transactions",
+            "resultado": {
+              "count": 0,
+              "projecao": false,
+              "status": "ok",
+              "transactions": []
+            },
+            "sequencia": 1
+          },
+          {
+            "operacao": "op-1",
+            "sequencia": 2
+          }
+        ],
+        "turno_id": "01bca67caff44b8cb8e23644065073e7"
+      },
+      "metricas": {
+        "hora": "12:30:56",
+        "latencia_ms": 115512,
+        "rota": "financeiro",
+        "status": "ok",
+        "tokens_total": 25654,
+        "custo_usd": 0.00611
+      },
+      "modelos_tentativas": 9,
+      "modelos_erros": 2,
+      "tools": [
+        {
+          "nome": "query_transactions",
+          "argumentos": {
+            "input": "{'date_from_local': '2026-10-29', 'date_to_local': '2026-10-29'}"
+          },
+          "resultado": {
+            "output": {
+              "additional_kwargs": {},
+              "content": "{\"status\": \"ok\", \"count\": 0, \"transactions\": [], \"projecao\": false}",
+              "name": "query_transactions",
+              "response_metadata": {},
+              "status": "success",
+              "tool_call_id": "4f8262ef-0c29-4503-8097-bedc2c91e051",
+              "type": "tool"
+            }
+          },
+          "inicio_utc": "2026-10-29T15:29:04.206724+00:00"
+        },
+        {
+          "nome": "add_transaction",
+          "argumentos": {
+            "input": "{'amount': 30, 'category_name': 'outros', 'currency': 'BRL', 'description': 'DEPOIS-CALCA', 'occurred_at': '2026-10-29', 'source_text': 'Registrar compra de calça de 30 reais em 29/10/2026, descrição DEPOIS-CALCA', 'type_name': 'EXPENSES'}"
+          },
+          "resultado": {
+            "output": {
+              "additional_kwargs": {},
+              "content": "{\"status\": \"preparado\", \"referencia_temporaria\": \"op-1\", \"operacao\": \"add_transaction\", \"dados\": {\"registro\": {\"id\": null, \"amount\": \"30.00\", \"type\": 2, \"category_id\": 24, \"description\": \"DEPOIS-CALCA\", \"payment_method\": null, \"occurred_at\": \"2026-10-29T00:00:00-03:00\", \"source_text\": \"Primeiro liste todas as transações de 29/10/2026 e só depois registre uma compra de calça de 30 reais nesse dia, com descrição DEPOIS-CALCA.\"}}, \"persistido\": false}",
+              "name": "add_transaction",
+              "response_metadata": {},
+              "status": "success",
+              "tool_call_id": "fc_dc85f98a-3f62-4059-aa33-c9b1ecae1a42",
+              "type": "tool"
+            }
+          },
+          "inicio_utc": "2026-10-29T15:29:42.843772+00:00"
+        }
+      ],
+      "conclusao": "Consulta ocorreu antes do preparo e retornou zero; INSERT aprovado confirmado uma vez, ID 24, 30 BRL, 29/10/2026 em São Paulo. Resposta final inadequada: recomenda registrar o que o executor já salvou.",
+      "status_http_observado": null,
+      "status_http_previsto_pela_rota": 200
+    },
+    {
+      "cenario": 4,
+      "pergunta": "Registre uma compra de 10 dólares americanos em 28/10/2026, com descrição DEPOIS-CAMBIO.",
+      "resposta_mongo": null,
+      "resposta_orquestrador": null,
+      "veredito": null,
+      "plano_avaliado": null,
+      "metricas": {
+        "hora": "12:33:04",
+        "latencia_ms": 111224,
+        "rota": "—",
+        "status": "erro",
+        "tokens_total": 10679,
+        "custo_usd": 0.001843
+      },
+      "modelos_tentativas": 6,
+      "modelos_erros": 3,
+      "tools": [
+        {
+          "nome": "add_transaction",
+          "argumentos": {
+            "input": "{'amount': 10, 'category_name': 'outros', 'currency': 'USD', 'description': 'DEPOIS-CAMBIO', 'occurred_at': '2026-10-28', 'source_text': 'Registre uma compra de 10 dólares americanos em 28/10/2026, com descrição DEPOIS-CAMBIO', 'type_name': 'EXPENSES'}"
+          },
+          "resultado": {
+            "output": {
+              "additional_kwargs": {},
+              "content": "{\"status\": \"preparado\", \"referencia_temporaria\": \"op-1\", \"operacao\": \"add_transaction\", \"dados\": {\"registro\": {\"id\": null, \"amount\": \"53.27\", \"type\": 2, \"category_id\": 24, \"description\": \"DEPOIS-CAMBIO\", \"payment_method\": null, \"occurred_at\": \"2026-10-28T00:00:00-03:00\", \"source_text\": \"Registre uma compra de 10 dólares americanos em 28/10/2026, com descrição DEPOIS-CAMBIO.\"}}, \"conversao\": {\"moeda_original\": \"USD\", \"valor_original\": \"10\", \"moeda_destino\": \"BRL\", \"taxa\": \"5.327135542980328752357855026\", \"data_solicitada\": \"2026-10-28\", \"data_cotacao\": \"2026-10-28\", \"valor_brl\": \"53.27\", \"fonte\": \"Banco Central Europeu\"}, \"persistido\": false}",
+              "name": "add_transaction",
+              "response_metadata": {},
+              "status": "success",
+              "tool_call_id": "fc_60c952f1-fecf-4d38-a15e-007125bfbfb7",
+              "type": "tool"
+            }
+          },
+          "inicio_utc": "2026-10-29T15:32:11.909032+00:00"
+        }
+      ],
+      "conclusao": "Conversão real preparada: 10 USD -> 53.27 BRL; taxa 5.327135542980328752357855026 em 28/10/2026. Gemini 429 diário e Groq 429 TPM interromperam antes de orquestrador/juiz. Nenhum INSERT confirmado.",
+      "status_http_observado": null,
+      "status_http_previsto_pela_rota": 503
+    },
+    {
+      "cenario": 5,
+      "pergunta": "Crie o evento DEPOIS-AGENDA-A em 10/11/2026 das 20h às 21h e o evento DEPOIS-AGENDA-B em 11/11/2026 das 20h às 21h.",
+      "resposta_mongo": null,
+      "resposta_orquestrador": null,
+      "veredito": null,
+      "plano_avaliado": null,
+      "metricas": {
+        "hora": "12:33:50",
+        "latencia_ms": 2858,
+        "rota": "—",
+        "status": "erro",
+        "tokens_total": 465,
+        "custo_usd": 0.000129
+      },
+      "modelos_tentativas": 2,
+      "modelos_erros": 1,
+      "tools": [],
+      "conclusao": "Groq output_parse_failed no roteador. Não alcançou agente de agenda, add_event, juiz ou Google. Nenhum evento local DEPOIS. Não valida criação Google bem-sucedida.",
+      "status_http_observado": null,
+      "status_http_previsto_pela_rota": 503
+    }
+  ],
+  "banco_depois": {
+    "transactions": [
+      {
+        "id": 24,
+        "amount": "30.00",
+        "type": 2,
+        "category_id": 24,
+        "description": "DEPOIS-CALCA",
+        "payment_method": null,
+        "occurred_at": "2026-10-29 00:00:00-03:00",
+        "source_text": "Primeiro liste todas as transações de 29/10/2026 e só depois registre uma compra de calça de 30 reais nesse dia, com descrição DEPOIS-CALCA."
+      }
+    ],
+    "events": []
+  },
+  "limitacoes": [
+    "7 turnos antes e 5 depois; sem atribuição causal exclusiva ao adiamento",
+    "Quotas e fallback prejudicaram a bateria",
+    "Custo/tokens do JEV e de tentativas falhas não têm contabilização completa",
+    "HTTP no navegador não capturado; códigos derivados da rota são inferência",
+    "Nenhuma chamada de negócio foi repetida durante a coleta; auditoria controlada usa SQL isolado e Google/juiz simulados"
+  ]
+}

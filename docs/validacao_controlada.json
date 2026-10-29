@@ -1,0 +1,662 @@
+{
+  "schema_removido": true,
+  "metodo": "SQL real isolado; juiz e Google simulados; tools anteriores extraídas do ZIP de baseline, sem executar agentes ou modelos",
+  "casos": [
+    {
+      "ferramenta": "add_transaction",
+      "versao": "antes",
+      "marcador": "EVID-ADD_TRANSACTION-ANTES-5116d02f55",
+      "schema": "test_juiz_fd87fc804e6c4f779780935fdf421d2e",
+      "juiz_real": false,
+      "google_real": false,
+      "antes": {
+        "transactions": [],
+        "events": []
+      },
+      "retorno_tool": {
+        "status": "ok",
+        "id": 1,
+        "occurred_at": "2026-10-29 10:00:00-03:00"
+      },
+      "apos_tool_antes_juiz": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-ADD_TRANSACTION-ANTES-5116d02f55",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-ADD_TRANSACTION-ANTES-5116d02f55"
+          }
+        ],
+        "events": []
+      },
+      "veredito": {
+        "aprovado": false,
+        "motivo": "sem_apoio noul=0.10",
+        "tecnico": false,
+        "turno_id": null,
+        "hash_plano": null
+      },
+      "execucao": null,
+      "repeticao_mesmo_plano": null,
+      "depois": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-ADD_TRANSACTION-ANTES-5116d02f55",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-ADD_TRANSACTION-ANTES-5116d02f55"
+          }
+        ],
+        "events": []
+      },
+      "chamadas_google_simuladas": [],
+      "validado": true
+    },
+    {
+      "ferramenta": "add_transaction",
+      "versao": "depois",
+      "marcador": "EVID-ADD_TRANSACTION-DEPOIS-a78545c72a",
+      "schema": "test_juiz_fd87fc804e6c4f779780935fdf421d2e",
+      "juiz_real": false,
+      "google_real": false,
+      "antes": {
+        "transactions": [],
+        "events": []
+      },
+      "retorno_tool": {
+        "status": "preparado",
+        "referencia_temporaria": "op-1",
+        "operacao": "add_transaction",
+        "dados": {
+          "registro": {
+            "id": null,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-ADD_TRANSACTION-DEPOIS-a78545c72a",
+            "payment_method": null,
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "Registre 15 reais com descrição EVID-ADD_TRANSACTION-DEPOIS-a78545c72a"
+          }
+        },
+        "persistido": false
+      },
+      "apos_tool_antes_juiz": {
+        "transactions": [],
+        "events": []
+      },
+      "veredito": {
+        "aprovado": false,
+        "motivo": "sem_apoio noul=0.10",
+        "tecnico": false,
+        "turno_id": "4165334c0f524d068faf6c5ad38bfb31",
+        "hash_plano": "e65fb31d32f9cdb8a9749357190a91b0ecf0e986cf563fca585a0823dd4f2ed6"
+      },
+      "execucao": {
+        "status": "recusado",
+        "mensagem": "",
+        "itens": [],
+        "tecnico": false
+      },
+      "repeticao_mesmo_plano": {
+        "status": "recusado",
+        "mensagem": "",
+        "itens": [],
+        "tecnico": false
+      },
+      "depois": {
+        "transactions": [],
+        "events": []
+      },
+      "chamadas_google_simuladas": [],
+      "validado": true
+    },
+    {
+      "ferramenta": "add_transaction",
+      "versao": "depois",
+      "marcador": "EVID-ADD_TRANSACTION-DEPOIS-7b3771fbcf",
+      "schema": "test_juiz_fd87fc804e6c4f779780935fdf421d2e",
+      "juiz_real": false,
+      "google_real": false,
+      "antes": {
+        "transactions": [],
+        "events": []
+      },
+      "retorno_tool": {
+        "status": "preparado",
+        "referencia_temporaria": "op-1",
+        "operacao": "add_transaction",
+        "dados": {
+          "registro": {
+            "id": null,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-ADD_TRANSACTION-DEPOIS-7b3771fbcf",
+            "payment_method": null,
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "Registre 15 reais com descrição EVID-ADD_TRANSACTION-DEPOIS-7b3771fbcf"
+          }
+        },
+        "persistido": false
+      },
+      "apos_tool_antes_juiz": {
+        "transactions": [],
+        "events": []
+      },
+      "veredito": {
+        "aprovado": true,
+        "motivo": "apoiada noul=0.99",
+        "tecnico": false,
+        "turno_id": "a8e03a060bb64648a2e75c5551c049ce",
+        "hash_plano": "e5f1aec4429f366ea82038046619e65ff09446fb5dd2a2f27bf21ffc51a55b12"
+      },
+      "execucao": {
+        "status": "ok",
+        "mensagem": "",
+        "itens": [
+          {
+            "referencia": "op-1",
+            "operacao": "add_transaction",
+            "id": 1,
+            "banco": "confirmado"
+          }
+        ],
+        "tecnico": false
+      },
+      "repeticao_mesmo_plano": {
+        "status": "erro",
+        "mensagem": "Este plano já foi processado; nenhuma operação foi repetida.",
+        "itens": [],
+        "tecnico": true
+      },
+      "depois": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-ADD_TRANSACTION-DEPOIS-7b3771fbcf",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "Registre 15 reais com descrição EVID-ADD_TRANSACTION-DEPOIS-7b3771fbcf"
+          }
+        ],
+        "events": []
+      },
+      "chamadas_google_simuladas": [],
+      "validado": true
+    },
+    {
+      "ferramenta": "update_transaction",
+      "versao": "antes",
+      "marcador": "EVID-UPDATE_TRANSACTION-ANTES-93910a07e2",
+      "schema": "test_juiz_fd87fc804e6c4f779780935fdf421d2e",
+      "juiz_real": false,
+      "google_real": false,
+      "antes": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-ANTES-93910a07e2",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-ANTES-93910a07e2"
+          }
+        ],
+        "events": []
+      },
+      "retorno_tool": {
+        "status": "ok",
+        "rows_affected": 1,
+        "id": 1,
+        "updated": {
+          "id": 1,
+          "occurred_at": "2026-10-29 10:00:00-03:00",
+          "amount": 18.0,
+          "type": "EXPENSES",
+          "category": "outros",
+          "description": "EVID-UPDATE_TRANSACTION-ANTES-93910a07e2",
+          "payment_method": null,
+          "source_text": "EVID-UPDATE_TRANSACTION-ANTES-93910a07e2"
+        }
+      },
+      "apos_tool_antes_juiz": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "18.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-ANTES-93910a07e2",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-ANTES-93910a07e2"
+          }
+        ],
+        "events": []
+      },
+      "veredito": {
+        "aprovado": false,
+        "motivo": "sem_apoio noul=0.10",
+        "tecnico": false,
+        "turno_id": null,
+        "hash_plano": null
+      },
+      "execucao": null,
+      "repeticao_mesmo_plano": null,
+      "depois": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "18.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-ANTES-93910a07e2",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-ANTES-93910a07e2"
+          }
+        ],
+        "events": []
+      },
+      "chamadas_google_simuladas": [],
+      "validado": true
+    },
+    {
+      "ferramenta": "update_transaction",
+      "versao": "depois",
+      "marcador": "EVID-UPDATE_TRANSACTION-DEPOIS-99baf0b0c1",
+      "schema": "test_juiz_fd87fc804e6c4f779780935fdf421d2e",
+      "juiz_real": false,
+      "google_real": false,
+      "antes": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-DEPOIS-99baf0b0c1",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-DEPOIS-99baf0b0c1"
+          }
+        ],
+        "events": []
+      },
+      "retorno_tool": {
+        "status": "preparado",
+        "referencia_temporaria": "op-1",
+        "operacao": "update_transaction",
+        "dados": {
+          "id": 1,
+          "referencia_alvo": null,
+          "registro": {
+            "id": 1,
+            "amount": "18.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-DEPOIS-99baf0b0c1",
+            "payment_method": null,
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-DEPOIS-99baf0b0c1"
+          }
+        },
+        "persistido": false
+      },
+      "apos_tool_antes_juiz": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-DEPOIS-99baf0b0c1",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-DEPOIS-99baf0b0c1"
+          }
+        ],
+        "events": []
+      },
+      "veredito": {
+        "aprovado": false,
+        "motivo": "sem_apoio noul=0.10",
+        "tecnico": false,
+        "turno_id": "8a6d55f7ac754820bf399fea0ef0eb70",
+        "hash_plano": "bf456089decc6529143fe77194ee6bda6d51dcd25ede5f6dea5b30582c44d42b"
+      },
+      "execucao": {
+        "status": "recusado",
+        "mensagem": "",
+        "itens": [],
+        "tecnico": false
+      },
+      "repeticao_mesmo_plano": {
+        "status": "recusado",
+        "mensagem": "",
+        "itens": [],
+        "tecnico": false
+      },
+      "depois": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-DEPOIS-99baf0b0c1",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-DEPOIS-99baf0b0c1"
+          }
+        ],
+        "events": []
+      },
+      "chamadas_google_simuladas": [],
+      "validado": true
+    },
+    {
+      "ferramenta": "update_transaction",
+      "versao": "depois",
+      "marcador": "EVID-UPDATE_TRANSACTION-DEPOIS-f4c2660080",
+      "schema": "test_juiz_fd87fc804e6c4f779780935fdf421d2e",
+      "juiz_real": false,
+      "google_real": false,
+      "antes": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-DEPOIS-f4c2660080",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-DEPOIS-f4c2660080"
+          }
+        ],
+        "events": []
+      },
+      "retorno_tool": {
+        "status": "preparado",
+        "referencia_temporaria": "op-1",
+        "operacao": "update_transaction",
+        "dados": {
+          "id": 1,
+          "referencia_alvo": null,
+          "registro": {
+            "id": 1,
+            "amount": "18.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-DEPOIS-f4c2660080",
+            "payment_method": null,
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-DEPOIS-f4c2660080"
+          }
+        },
+        "persistido": false
+      },
+      "apos_tool_antes_juiz": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "15.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-DEPOIS-f4c2660080",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-DEPOIS-f4c2660080"
+          }
+        ],
+        "events": []
+      },
+      "veredito": {
+        "aprovado": true,
+        "motivo": "apoiada noul=0.99",
+        "tecnico": false,
+        "turno_id": "068c6b51466a430ba2b169cab081041f",
+        "hash_plano": "7c732f6e06a394153bbe7e01617666f22e4c1ae2e19af1cf07ddf82761187912"
+      },
+      "execucao": {
+        "status": "ok",
+        "mensagem": "",
+        "itens": [
+          {
+            "referencia": "op-1",
+            "operacao": "update_transaction",
+            "id": 1,
+            "banco": "confirmado"
+          }
+        ],
+        "tecnico": false
+      },
+      "repeticao_mesmo_plano": {
+        "status": "erro",
+        "mensagem": "Este plano já foi processado; nenhuma operação foi repetida.",
+        "itens": [],
+        "tecnico": true
+      },
+      "depois": {
+        "transactions": [
+          {
+            "id": 1,
+            "amount": "18.00",
+            "type": 2,
+            "category_id": 1,
+            "description": "EVID-UPDATE_TRANSACTION-DEPOIS-f4c2660080",
+            "occurred_at": "2026-10-29T10:00:00-03:00",
+            "source_text": "EVID-UPDATE_TRANSACTION-DEPOIS-f4c2660080"
+          }
+        ],
+        "events": []
+      },
+      "chamadas_google_simuladas": [],
+      "validado": true
+    },
+    {
+      "ferramenta": "add_event",
+      "versao": "antes",
+      "marcador": "EVID-ADD_EVENT-ANTES-c155e62ef0",
+      "schema": "test_juiz_fd87fc804e6c4f779780935fdf421d2e",
+      "juiz_real": false,
+      "google_real": false,
+      "antes": {
+        "transactions": [],
+        "events": []
+      },
+      "retorno_tool": {
+        "status": "ok",
+        "id": 1,
+        "title": "EVID-ADD_EVENT-ANTES-c155e62ef0",
+        "start_time": "2030-01-10T10:00:00-03:00",
+        "end_time": "2030-01-10T11:00:00-03:00",
+        "data_local": "10/01/2030",
+        "hora_inicio_local": "10:00",
+        "data_fim_local": "10/01/2030",
+        "hora_fim_local": "11:00",
+        "fuso_horario": "America/Sao_Paulo"
+      },
+      "apos_tool_antes_juiz": {
+        "transactions": [],
+        "events": [
+          {
+            "id": 1,
+            "title": "EVID-ADD_EVENT-ANTES-c155e62ef0",
+            "start_time": "2030-01-10T10:00:00-03:00",
+            "end_time": "2030-01-10T11:00:00-03:00",
+            "source_text": "EVID-ADD_EVENT-ANTES-c155e62ef0"
+          }
+        ]
+      },
+      "veredito": {
+        "aprovado": false,
+        "motivo": "sem_apoio noul=0.10",
+        "tecnico": false,
+        "turno_id": null,
+        "hash_plano": null
+      },
+      "execucao": null,
+      "repeticao_mesmo_plano": null,
+      "depois": {
+        "transactions": [],
+        "events": [
+          {
+            "id": 1,
+            "title": "EVID-ADD_EVENT-ANTES-c155e62ef0",
+            "start_time": "2030-01-10T10:00:00-03:00",
+            "end_time": "2030-01-10T11:00:00-03:00",
+            "source_text": "EVID-ADD_EVENT-ANTES-c155e62ef0"
+          }
+        ]
+      },
+      "chamadas_google_simuladas": [],
+      "validado": true
+    },
+    {
+      "ferramenta": "add_event",
+      "versao": "depois",
+      "marcador": "EVID-ADD_EVENT-DEPOIS-6531bd79eb",
+      "schema": "test_juiz_fd87fc804e6c4f779780935fdf421d2e",
+      "juiz_real": false,
+      "google_real": false,
+      "antes": {
+        "transactions": [],
+        "events": []
+      },
+      "retorno_tool": {
+        "status": "preparado",
+        "referencia_temporaria": "op-1",
+        "operacao": "add_event",
+        "dados": {
+          "id": null,
+          "title": "EVID-ADD_EVENT-DEPOIS-6531bd79eb",
+          "start_time": "2030-01-10T10:00:00-03:00",
+          "end_time": "2030-01-10T11:00:00-03:00",
+          "location": null,
+          "notes": null,
+          "source_text": "Crie o evento EVID-ADD_EVENT-DEPOIS-6531bd79eb em 10/01/2030 das 10h às 11h.",
+          "recorded_at": "2026-10-29T12:41:25.020265-03:00",
+          "google_necessario": true
+        },
+        "persistido": false
+      },
+      "apos_tool_antes_juiz": {
+        "transactions": [],
+        "events": []
+      },
+      "veredito": {
+        "aprovado": false,
+        "motivo": "sem_apoio noul=0.10",
+        "tecnico": false,
+        "turno_id": "7a7c83001ffd4fc0898db03f80f43407",
+        "hash_plano": "f65ab51dc4bc24f7115955b28879e35e5b152462e132320672477b5ae6a1a4e5"
+      },
+      "execucao": {
+        "status": "recusado",
+        "mensagem": "",
+        "itens": [],
+        "tecnico": false
+      },
+      "repeticao_mesmo_plano": {
+        "status": "recusado",
+        "mensagem": "",
+        "itens": [],
+        "tecnico": false
+      },
+      "depois": {
+        "transactions": [],
+        "events": []
+      },
+      "chamadas_google_simuladas": [],
+      "validado": true
+    },
+    {
+      "ferramenta": "add_event",
+      "versao": "depois",
+      "marcador": "EVID-ADD_EVENT-DEPOIS-2f8450a7b2",
+      "schema": "test_juiz_fd87fc804e6c4f779780935fdf421d2e",
+      "juiz_real": false,
+      "google_real": false,
+      "antes": {
+        "transactions": [],
+        "events": []
+      },
+      "retorno_tool": {
+        "status": "preparado",
+        "referencia_temporaria": "op-1",
+        "operacao": "add_event",
+        "dados": {
+          "id": null,
+          "title": "EVID-ADD_EVENT-DEPOIS-2f8450a7b2",
+          "start_time": "2030-01-10T10:00:00-03:00",
+          "end_time": "2030-01-10T11:00:00-03:00",
+          "location": null,
+          "notes": null,
+          "source_text": "Crie o evento EVID-ADD_EVENT-DEPOIS-2f8450a7b2 em 10/01/2030 das 10h às 11h.",
+          "recorded_at": "2026-10-29T12:41:39.669000-03:00",
+          "google_necessario": true
+        },
+        "persistido": false
+      },
+      "apos_tool_antes_juiz": {
+        "transactions": [],
+        "events": []
+      },
+      "veredito": {
+        "aprovado": true,
+        "motivo": "apoiada noul=0.99",
+        "tecnico": false,
+        "turno_id": "e2cd31fc09c643588d2f51675751f7c5",
+        "hash_plano": "2730d0a4be8bdcb58d2b67fac33f25c6e49cd9d30659745c69901e5de9517df4"
+      },
+      "execucao": {
+        "status": "ok",
+        "mensagem": "",
+        "itens": [
+          {
+            "referencia": "op-1",
+            "id": 1,
+            "title": "EVID-ADD_EVENT-DEPOIS-2f8450a7b2",
+            "banco": "confirmado",
+            "google": "confirmado",
+            "google_id": "google-simulado-EVID-ADD_EVENT-DEPOIS-2f8450a7b2"
+          }
+        ],
+        "tecnico": false
+      },
+      "repeticao_mesmo_plano": {
+        "status": "erro",
+        "mensagem": "Este plano já foi processado; nenhuma operação foi repetida.",
+        "itens": [],
+        "tecnico": true
+      },
+      "depois": {
+        "transactions": [],
+        "events": [
+          {
+            "id": 1,
+            "title": "EVID-ADD_EVENT-DEPOIS-2f8450a7b2",
+            "start_time": "2030-01-10T10:00:00-03:00",
+            "end_time": "2030-01-10T11:00:00-03:00",
+            "source_text": "Crie o evento EVID-ADD_EVENT-DEPOIS-2f8450a7b2 em 10/01/2030 das 10h às 11h."
+          }
+        ]
+      },
+      "chamadas_google_simuladas": [
+        {
+          "title": "EVID-ADD_EVENT-DEPOIS-2f8450a7b2",
+          "start_time": "2030-01-10T10:00:00-03:00",
+          "end_time": "2030-01-10T11:00:00-03:00",
+          "location": null,
+          "description": null
+        }
+      ],
+      "validado": true
+    }
+  ]
+}

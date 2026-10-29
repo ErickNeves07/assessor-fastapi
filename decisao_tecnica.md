@@ -184,7 +184,9 @@ Limites de medição: painel guarda somente 50 turnos na RAM; reiniciar zera. Cu
 
 Foram aprovados 37 testes da suíte SQL/grafo/câmbio, um teste dirigido de autorização estrita e um de classificação técnica no monitor: **39 testes, sem falhas**, entre a execução da suíte e verificações dirigidas posteriores. Usaram schema Postgres isolado, removido ao final, Google simulado e modelos/juiz determinísticos. Verificam recusa sem efeito nas três tools, confirmação uma vez, ordem de consultas, UPDATE projetado, câmbio, falha intermediária, timeout, commit incerto, histórico, MCP, plano antigo/mutado e falha técnica de preparo seguida de recusa.
 
-Isso comprova os comportamentos nas condições controladas. Não é uma medição de latência, tokens ou custo dos provedores reais. As métricas SRE reais posteriores permanecem pendentes da bateria manual abaixo. Não se preencheu uma coluna de desempenho posterior com tempos de testes simulados nem se prometeu cumprir o SLO antes de medir.
+Isso comprova os comportamentos nas condições controladas. Não é uma medição de latência, tokens ou custo dos provedores reais. A bateria manual posterior foi coletada em 29/10/2026: cinco turnos, média 68,085 s, p95 115,512 s, 40% de erro no monitor, 93.371 tokens e US$ 0,026932 de custo estimado. O [relatório posterior](docs/RELATORIO_VALIDACAO_DEPOIS.md) registra respostas, falhas, comparação e pendências. Não se usaram tempos de testes simulados como desempenho dos provedores.
+
+A coleta real comprovou recusa de criação sem efeito e inserção aprovada na ordem/data corretas, mas identificou resposta inadequada na confirmação da calça, limites de provedor e falha de parsing no roteador. Não valida ainda UPDATE de registro existente, conversão seguida de commit ou criação Google completa. Uma auditoria complementar de nove cenários com SQL isolado comparou as tools antigas e novas: recusa com efeito antes, recusa sem efeito depois e aprovação uma única vez nas três tools. Juiz e Google foram simulados nessa auditoria, conforme [evidências controladas](docs/validacao_controlada.json).
 
 ## 8. Mensagens para o teste manual
 
@@ -242,11 +244,11 @@ Comparar os mesmos cenários e quantidade de repetições, separando criação, 
 
 | Indicador | Antes observado | Depois |
 |---|---|---|
-| Efeito após recusa | 3/3 nas recusas financeiras observadas | Nenhum nos testes controlados das três tools; conferir também os turnos reais |
-| Ordem consulta/inserção | Lote paralelo e efeitos de fuso observados | Verificada em testes reais SQL com modelo simulado; validar respostas reais |
-| Dois eventos | A/B locais; somente A Google; resposta vazia | Dois destinos por item verificados com Google simulado; conferir calendário no teste manual |
-| Conversão | 10 USD gravados como número 10 | Decimal e data anterior verificados; confirmar novo registro real |
-| Latência, tokens, custo, p95, erro real | Tabela da seção 7 | Preencher com a exportação posterior; não estimado como resultado medido |
+| Efeito após recusa | 3/3 nas recusas financeiras observadas | Uma recusa real sem INSERT; controle das três tools sem efeito |
+| Ordem consulta/inserção | Lote paralelo e efeitos de fuso observados | Verificada nos traces reais; calça ID 24 salva no dia local correto, com confirmação textual inadequada |
+| Dois eventos | A/B locais; somente A Google; resposta vazia | Pedido falhou no roteador; sucesso real ainda pendente, controle com Google simulado aprovado |
+| Conversão | 10 USD gravados como número 10 | Preparo real de 53,27 BRL; falha de modelos antes do juiz impediu gravação |
+| Latência, tokens, custo, p95, erro real | Tabela da seção 7 | Média 68,085 s, p95 115,512 s, 93.371 tokens, US$ 0,026932 e 40% de erro; quotas e amostras diferentes limitam comparação |
 
 A coleta anterior foi feita antes do ajuste pontual de fuso. Compará-la diretamente com a solução final mede o conjunto das correções. Para atribuir diferenças exclusivamente ao adiamento, seria necessária uma coleta intermediária com fuso já corrigido. Falhas que antes apareciam como `ok` podem agora ser classificadas corretamente; distinguir melhoria na medição de mudança na frequência real de falhas.
 
@@ -265,6 +267,9 @@ A coleta anterior foi feita antes do ajuste pontual de fuso. Compará-la diretam
 | `tests/test_planejamento.py` | Autorização estrita: valores ambíguos não liberam SQL |
 | `scripts/exportar_metricas.ps1` | Exportação comparável antes/depois sem executar operações |
 | `docs/metricas_antes.json` | Dados consolidados reais da linha de base, sem credenciais |
+| `docs/metricas_depois.json` | Cinco pedidos reais posteriores, respostas, planos, vereditos, consultas e métricas |
+| `docs/validacao_controlada.json` | Nove cenários com marcador e estados antes/depois nas três tools antigas e novas; SQL isolado, juiz/Google simulados |
+| `docs/RELATORIO_VALIDACAO_DEPOIS.md` | Comparação real, problemas encontrados, cobertura e próximos testes mínimos |
 | `decisao_tecnica.md` | Este registro de decisão, evidências, alternativas, arquivos e testes |
 
 ## 11. Arquivos modificados

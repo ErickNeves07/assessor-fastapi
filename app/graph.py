@@ -297,7 +297,11 @@ def _executar_turno(pergunta_usuario: str, session_id: str, user_id: str, turno_
             resultado = executar_plano(contexto.plano, estado_final.get("veredito_juiz") or {})
             if resultado.status not in ("ok", "recusado"):
                 resposta = resultado.mensagem
-        estado_final["erro_tecnico"] = resultado.tecnico or (estado_final.get("veredito_juiz") or {}).get("tecnico", False)
+        estado_final["erro_tecnico"] = (
+            resultado.tecnico
+            or (estado_final.get("veredito_juiz") or {}).get("tecnico", False)
+            or any(erro["tecnico"] for erro in contexto.plano.erros)
+        )
         try:
             ultima = estado_final["messages"][-1]
             fluxo_agentes.update_state(config, {

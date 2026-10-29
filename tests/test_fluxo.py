@@ -106,6 +106,15 @@ class TestFluxo(BancoIsolado):
         self.assertEqual(resposta, juiz.FRASE_SEGURA)
         self.assertEqual(self.sql("SELECT count(*) FROM transactions")[0][0], 0)
 
+    def test_recusa_nao_oculta_falha_tecnica_do_preparo_no_monitor(self):
+        self.agente("financeiro", [AIMessage(content="", tool_calls=[self.chamada_financeira()]), self.resumo()], "Não consegui preparar o lançamento.")
+        self.julgamento.side_effect = lambda p, r, e: juiz._publicar(juiz.FRASE_SEGURA, "sem_apoio noul=0.30", r)
+        with patch("app.tools.financeiro._resolver", side_effect=RuntimeError("Banco indisponível no preparo")):
+            resposta = graph.executar_fluxo_assessor("Registre 15 reais", self.sessao, "teste")
+        self.assertEqual(resposta, juiz.FRASE_SEGURA)
+        self.assertEqual(self.sql("SELECT count(*) FROM transactions")[0][0], 0)
+        self.assertEqual(self.fim_turno.call_args.kwargs["status"], "erro")
+
     def test_resposta_vazia_do_especialista_usa_plano_no_orquestrador(self):
         self.agente("financeiro", [AIMessage(content="", tool_calls=[self.chamada_financeira()]), AIMessage(content="")], "Registrei 15 reais.")
         resposta = graph.executar_fluxo_assessor("Registre 15 reais", self.sessao, "teste")

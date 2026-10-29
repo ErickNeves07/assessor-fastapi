@@ -81,8 +81,10 @@ O catálogo pode ser consultado sem criar eventos:
 
 No chat, teste: `Marque um teste de agenda amanhã às 14h, por uma hora.`
 Confira o registro em `events` e na conta aberta em <https://calendar.google.com>.
-O fluxo consulta conflitos, grava no PostgreSQL e chama o Google. Se apenas o
-Google falhar, o registro local permanece e a resposta deve informar isso.
+O fluxo consulta conflitos e prepara o evento. Depois da aprovação do juiz,
+executa SQL sem commit, chama o Google e confirma o item local. Se Google falhar,
+o item local é cancelado; em timeout, a resposta informa incerteza externa.
+Em pedidos com vários eventos, os anteriores já confirmados são preservados.
 Não repita o pedido de criação sem conferir o banco e o calendário, para evitar
 duplicatas. O fim padrão é uma hora após o início nos dois destinos.
 
@@ -121,9 +123,18 @@ Financeiro e agenda passam por orquestrador, guardrail de saída e juiz;
 FAQ passa diretamente pelo juiz, como no roteiro. O juiz mantém a resposta
 somente com `choice=apoiada` e `noul >= 0.55`.
 
-O juiz avalia a frase depois das ferramentas. Ele não desfaz uma escrita já
-confirmada no banco. Tratamento de moedas e controle de escritas recusadas
-continuam como a atividade seguinte proposta no roteiro 7.
+As ferramentas de negócio preparam operações sem escrever. O juiz avalia o plano,
+as consultas e a resposta condicionada à execução. Recusa, timeout, ausência de
+chave ou veredito inválido impedem a execução das escritas. O juiz continua como
+último nó; o coordenador Python executa somente depois da aprovação.
+
+Consultas consideram apenas operações preparadas antes delas. Moedas estrangeiras
+são convertidas para BRL com `CurrencyConverter`, usando a data da transação ou a
+última cotação anterior disponível. A taxa é congelada durante o turno; não há
+coluna nova nem persistência adicional de metadados. Sem cotação, pedir valor em BRL.
+
+A decisão, o inventário de arquivos, as limitações e as mensagens de teste estão
+em [decisao_tecnica.md](decisao_tecnica.md). A implementação não usa wrappers.
 
 ## Sessões e ferramentas
 
@@ -145,8 +156,23 @@ histórico. Não compartilhe tokens nem chaves nos prints de teste.
 
 ## Verificar as alterações
 
-Os testes de regressão não criam eventos reais nem escrevem nos bancos externos:
+Os testes usam um schema PostgreSQL temporário e isolado, removido ao final;
+não alteram as tabelas de negócio existentes nem criam eventos Google reais.
+Configure `TEST_DATABASE_URL` para usar outro banco de teste, se desejar; na
+ausência dessa variável usam `DATABASE_URL`. É necessária permissão para criar
+schema. Modelos, juiz e Google são simulados nos testes automatizados.
 
 ```powershell
-.\.venv\Scripts\python -m unittest discover -s tests -v
+.\.venv\Scripts\python -m unittest discover -s tests -t . -v
 ```
+
+Depois de enviar a bateria manual no chat, exporte o monitor antes de reiniciar:
+
+```powershell
+& .\scripts\exportar_metricas.ps1 -Etapa depois
+```
+
+Os arquivos são salvos em `Downloads\metricas_assessor`. O monitor guarda somente
+50 turnos no processo atual. As medições anteriores estão em
+[docs/metricas_antes.json](docs/metricas_antes.json); medições simuladas não substituem
+latência, tokens e custo dos testes reais posteriores.

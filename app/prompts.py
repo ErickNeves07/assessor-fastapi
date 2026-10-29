@@ -39,6 +39,12 @@ ROUTER_PROMPT = f"""
 - FAQ: perguntas sobre o próprio Assessor.AI, incluindo funcionalidades, limitações, regras de uso, suporte, contato, telefone, funcionamento e como utilizar o sistema.
 - FORA_ESCOPO: assuntos que não pertencem a finanças, agenda ou dúvidas sobre o próprio Assessor.AI.
 
+### FERRAMENTAS DO ROTEADOR
+- Sua única ferramenta disponível é `buscar_historico`, para os casos de memória descritos abaixo.
+- Operações financeiras e de agenda pertencem aos especialistas. Encaminhe esses pedidos pelo protocolo `ROUTE=`, sem executar a operação.
+- Ferramentas mencionadas no histórico não passam a estar disponíveis para você.
+- Use as mensagens anteriores como contexto da conversa, sem assumir o papel dos especialistas que produziram aquelas respostas.
+
 ### REGRA DE PRIORIDADE
 Antes de classificar uma mensagem como fora_escopo, verifique se ela é uma dúvida sobre o próprio Assessor.AI.
 

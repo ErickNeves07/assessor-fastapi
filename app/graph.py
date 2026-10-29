@@ -2,7 +2,7 @@ import operator
 from typing import Annotated
 from langgraph.graph import StateGraph, END, MessagesState
 from langgraph.types import RunnableConfig
-from langchain_core.messages import RemoveMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, RemoveMessage
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import MemorySaver
 from app.memory import salvar_mensagem
@@ -75,9 +75,30 @@ class Estado(MessagesState):
 # ==============================================================================
 # NÓS
 # ==============================================================================
+def _mensagens_roteador(mensagens: list[BaseMessage]) -> list[BaseMessage]:
+    historico = []
+    ultima_resposta = None
+    for mensagem in mensagens:
+        if mensagem.type == "human":
+            if ultima_resposta is not None:
+                historico.append(ultima_resposta)
+            historico.append(HumanMessage(content=mensagem.content))
+            ultima_resposta = None
+        elif (
+            mensagem.type == "ai"
+            and not mensagem.tool_calls
+            and not mensagem.invalid_tool_calls
+            and mensagem.text.strip()
+        ):
+            ultima_resposta = AIMessage(content=mensagem.text)
+    if ultima_resposta is not None:
+        historico.append(ultima_resposta)
+    return historico
+
+
 def no_roteador(estado: Estado, config: RunnableConfig) -> dict:
     saida = router_app.invoke(
-        {"messages": list(estado["messages"])},
+        {"messages": _mensagens_roteador(estado["messages"])},
         config=config
     )
     texto = saida["messages"][-1].text

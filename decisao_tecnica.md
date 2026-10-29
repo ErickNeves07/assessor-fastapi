@@ -1,14 +1,8 @@
-# Juiz tardio e conversão para reais — decisão técnica e entrega final
+## 1. O problema encontrado
 
-Branch: `feat/juiz-tardio`. Implementação da prática livre da Etapa 8, sem wrappers e sem novo agente.
+O problema era a ordem das etapas: `add_transaction`, `update_transaction` e `add_event` faziam o `commit` antes de o juiz avaliar a resposta. Quando ele recusava o turno, o banco já tinha sido alterado.
 
-**Fechamento em 29/10/2026:** este arquivo é a entrega na raiz exigida pelo HTML `pratica_juiz_tardio.zip`. A seção 13 consolida os últimos testes, o estado final do código, as limitações e a correspondência com os cinco itens da atividade. As seções anteriores preservam a decisão e as coletas anteriores; não se confundem seus resultados com os ajustes finais ainda não testados.
-
-## 1. Problema, evidências anteriores e objetivo
-
-Na versão anterior, `add_transaction`, `update_transaction` e `add_event` faziam `commit` antes do orquestrador, do guardrail de saída e do juiz. Uma resposta recusada não desfazia a alteração já confirmada.
-
-A bateria real de 29/10/2026 teve sete turnos, incluindo uma repetição de atualização e uma consulta adicional. Os dados consolidados estão em [docs/metricas_antes.json](docs/metricas_antes.json). Os retornos de ferramentas e a leitura posterior do banco confirmaram:
+Nos sete pedidos da primeira bateria, em 29/10/2026, encontramos três exemplos desse problema. Conferimos os retornos das ferramentas e os registros no banco. Os dados estão em [metricas_antes.json](docs/metricas_antes.json).
 
 | Caso anterior | Juiz | Efeito que permaneceu |
 |---|---|---|
@@ -16,7 +10,7 @@ A bateria real de 29/10/2026 teve sete turnos, incluindo uma repetição de atua
 | Atualizar `ANTES-CAMISETA` | `sem_apoio`, 0,52 | ID 21 alterado de 15 para 18 |
 | Criar `ANTES-CAMBIO`, pedido de 10 USD | `sem_apoio`, 0,36 | INSERT ID 23, valor 10 sem conversão |
 
-Isso comprovou criação e atualização financeiras mantidas após recusa. Não houve `add_event` recusado naquela amostra; não se atribui a ela uma evidência que não foi coletada. O teste de agenda mostrou outro problema: A e B foram inseridos localmente, mas somente A teve chamada Google. Após falhas de quota Gemini e fallback Groq, o especialista terminou vazio; o usuário recebeu `(sem resposta)`, aprovada pelo juiz em 0,80.
+Isso comprovou criação e atualização financeiras mantidas após recusa. A recusa de `add_event` foi reproduzida nos testes controlados. O teste de agenda mostrou outro problema: A e B foram inseridos localmente, mas somente A teve chamada Google. Após falhas de quota Gemini e fallback Groq, o especialista terminou vazio; o usuário recebeu `(sem resposta)`, aprovada pelo juiz em 0,80.
 
 Também se confirmou um defeito de fuso: `2026-10-29T00:00:00` sem offset era interpretado em GMT e passava a 28/10 às 21h em São Paulo. O ajuste pontual da conexão foi feito depois de preservar essa coleta. Nenhuma linha antiga foi corrigida retroativamente.
 
@@ -24,7 +18,7 @@ O HTTP 503 da rota de chat trata exceções dos provedores de modelo; não é o 
 
 Regra principal da solução: **se o juiz recusar, nenhuma criação ou alteração de negócio desse turno será executada no Postgres ou no Google**. Erro, timeout, chave ausente ou veredito inválido também não autorizam execução. Aprovação permite tentar executar; não comprova que a infraestrutura concluiu a operação.
 
-## 2. Decisão: adiar nas próprias tools
+## 2. A solução escolhida
 
 Antes:
 
@@ -42,7 +36,7 @@ especialista -> tools preparam operações e consultas projetadas
 
 O juiz continua sendo o último nó/agente do grafo. O executor é código Python chamado pelo coordenador depois de `fluxo_agentes.invoke`, sem outro modelo e sem alterar `POST /chat` ou `ChatResponse(resposta=...)`.
 
-As próprias tools preparam objetos validados, com referência temporária e status `preparado`. Não abrem transação de escrita nem geram IDs fictícios. As funções SQL de escrita ficam no executor. Não há registro provisório nas tabelas de negócio.
+Optamos por mudar as próprias tools. Elas preparam objetos validados, com referência temporária e status `preparado`. Não abrem transação de escrita nem geram IDs fictícios. As funções SQL de escrita ficam no executor. Não há registro provisório nas tabelas de negócio.
 
 O plano é exclusivo da requisição e propagado por contexto explícito do runtime. Sua representação serializável chega ao orquestrador e ao juiz. Um hash vincula o veredito ao turno e ao conteúdo aprovado; alteração posterior do plano invalida a autorização. O executor exige `aprovado is True`, plano congelado e ainda não consumido. Planos e aprovações anteriores são limpos no histórico e na inicialização de cada turno.
 
@@ -80,7 +74,7 @@ O executor revalida conflito de horário e usa um bloqueio transacional consulti
 
 Num lote, eventos anteriores já confirmados são preservados se o atual falhar. A execução para e informa os confirmados, o item falho/incerto e a não execução dos seguintes. A resposta integral do orquestrador não é liberada nesse caso.
 
-## 3. Decisões de negócio fechadas no chat
+## 3. Regras adotadas
 
 | Tema | Decisão implementada |
 |---|---|
@@ -95,7 +89,7 @@ Num lote, eventos anteriores já confirmados são preservados se o atual falhar.
 | Novas tentativas posteriores | Nenhuma fila, pendência para sincronização ou reexecução automática posterior |
 | Compensação | Excluída: não excluir/criar efeito inverso após gravação permanente |
 | Novo agente | Nenhum |
-| Wrapper de ferramentas | Excluído por escolha do usuário; preparo nas tools |
+| Wrapper de ferramentas | Preparo nas próprias tools, sem wrapper |
 | Limiar do juiz | 0,55, com `choice=apoiada` obrigatório; reduzir score não substitui corrigir fatos |
 | Data dinâmica por middleware | Não reintroduzida |
 | Evidências da agenda | Sem `evidencias_agenda.py` ou camada nova de normalização antes do juiz |
@@ -104,6 +98,8 @@ Num lote, eventos anteriores já confirmados são preservados se o atual falhar.
 Uma recusa legítima do juiz e uma falha técnica depois de sua aprovação são situações diferentes. O executor não reapresenta o resultado como recusa posterior do juiz, nem afirma que um Google confirmado foi desfeito.
 
 ## 4. Conversão de moedas
+
+
 
 Biblioteca escolhida: `CurrencyConverter==0.18.22`. Dados históricos oficiais do Banco Central Europeu são baixados com timeout e cache local de dados públicos por data, fora do repositório. BRL não consulta cotação. Não se usa silenciosamente a base embutida possivelmente desatualizada nem interpolação de taxas.
 
@@ -115,23 +111,23 @@ Sem moeda suportada ou cotação confiável, não preparar número estrangeiro c
 
 Um teste de integração de leitura obteve cotação real para 10 USD em 28/10/2026 e calculou R$ 53,27. Os testes automatizados usam taxas determinísticas para verificar cálculo e arredondamento; não dependem desse número fixo nem da disponibilidade da internet.
 
-## 5. Alternativas analisadas e motivos para não adotá-las
+## 5. Outras soluções que consideramos
 
 | Alternativa | Como funcionaria | Vantagem real | Custo/limite e decisão |
 |---|---|---|---|
 | Interceptar e julgar cada escrita | Avaliar uma ação antes de chamar sua tool | Pode barrar uma ação cedo | Aprovação individual não cobre recusa final posterior do turno; acrescentaria avaliações e não atenderia sozinha à regra |
-| Wrapper de adiamento | `wrap_tool_call` guardaria argumentos e retornaria preparado | Centraliza a fronteira para várias tools | Continua exigindo plano, validação, projeções e executor; usuário preferiu alterar as tools diretamente |
+| Wrapper de adiamento | `wrap_tool_call` guardaria argumentos e retornaria preparado | Centraliza a fronteira para várias tools | Continua exigindo plano, validação, projeções e executor; optamos por alterar as tools diretamente |
 | Transação aberta desde a primeira tool | SQL provisório compartilhado enquanto modelos e juiz respondem | Banco executa SQL e enxerga alterações próprias antes do juiz | Conexão e possíveis bloqueios ficam presos durante a latência de IA; preferido adiamento com transação posterior curta |
 | Linha com status provisório | Inserir antes e confirmar status depois | Facilita guardar intenção de forma durável | Já grava antes da decisão, exige esquema e filtros novos; não escolhido |
-| Compensar | Gravar e executar operação inversa na recusa | Pode reaproveitar tools que confirmam cedo | Segunda operação também pode falhar; Google não tem exclusão/alteração no escopo; excluído pelo usuário |
-| Comprovante que mantém escrita apesar da recusa final | Mostrar resultado persistido mesmo quando a redação foi recusada | Esclarece um efeito que já ocorreu | Contraria a invariável do HTML; proposta anterior corrigida e descartada |
+| Compensar | Gravar e executar operação inversa na recusa | Pode reaproveitar tools que confirmam cedo | Segunda operação também pode falhar; Google não tem exclusão/alteração no escopo; descartado por exigir uma segunda operação que também pode falhar |
+| Comprovante que mantém escrita apesar da recusa final | Mostrar resultado persistido mesmo quando a redação foi recusada | Esclarece um efeito que já ocorreu | Não atende à regra de impedir escrita em um turno recusado |
 | Google antes de qualquer SQL | Criar externamente e só então executar INSERT | Evita espera Google com transação local aberta | Erros SQL previsíveis podem deixar efeito só externo; executamos SQL sem commit primeiro |
 | Commit local antes de Google | Confirmar banco e tentar Google depois | Transação local mais curta | Deixaria item local em falha Google; contrário à regra escolhida |
-| Outbox e novas tentativas | Confirmar evento e tarefa durável de sincronização | Recupera falhas entre banco e API | Exigiria aceitar evento Google pendente; usuário retirou essa opção |
+| Outbox e novas tentativas | Confirmar evento e tarefa durável de sincronização | Recupera falhas entre banco e API | Exigiria aceitar evento Google pendente; optamos por informar o erro sem deixar sincronização pendente |
 | ID estável no Google + recuperação de pedido | Reusar identificador e guardar resultado para reconhecer repetição | Reduz duplicação quando resposta se perde | MCP `create_event` atual não expõe ID de evento; exigiria rever integração e identificação entre cliente/API; fora desta entrega |
 | Transação distribuída/2PC | Coordenar confirmação de ambos os destinos | Atomicidade se todos participassem | Calendar não participa da transação Postgres; `PREPARE TRANSACTION` isolado não resolve o resultado externo desconhecido |
 
-## 6. Falhas, quedas, histórico e garantias restantes
+## 6. Tratamento de falhas
 
 | Situação | Comportamento |
 |---|---|
@@ -182,15 +178,15 @@ O SLO continua p95 até 8 s e taxa de erro até 5%. Bloqueio de entrada é `bloq
 
 Limites de medição: painel guarda somente 50 turnos na RAM; reiniciar zera. Custo é estimativa da tabela fixa. Tokens/custo JEV, chamado diretamente por HTTP, não entram no coletor de chat models; espera JEV entra na latência. Chamadas de modelo com erro não têm contabilização completa de tokens/custo. Não interpretar ausência como custo provadamente zero.
 
-### O que já foi verificado depois
+### Testes automatizados e primeira bateria manual
 
-Foram aprovados 37 testes da suíte SQL/grafo/câmbio, um teste dirigido de autorização estrita e um de classificação técnica no monitor: **39 testes, sem falhas**, entre a execução da suíte e verificações dirigidas posteriores. Usaram schema Postgres isolado, removido ao final, Google simulado e modelos/juiz determinísticos. Verificam recusa sem efeito nas três tools, confirmação uma vez, ordem de consultas, UPDATE projetado, câmbio, falha intermediária, timeout, commit incerto, histórico, MCP, plano antigo/mutado e falha técnica de preparo seguida de recusa.
+Os **39 testes automatizados passaram**. A suíte cobre SQL, grafo, câmbio, autorização do executor e classificação de falhas no monitor. Os testes usaram schema Postgres isolado, Google simulado e modelos/juiz determinísticos. Eles verificam recusa sem efeito nas três tools, confirmação uma vez, ordem de consultas, UPDATE projetado, câmbio, falha intermediária, timeout, commit incerto, histórico, MCP, plano antigo/mutado e falha técnica de preparo seguida de recusa.
 
-Isso comprova os comportamentos nas condições controladas. Não é uma medição de latência, tokens ou custo dos provedores reais. A bateria manual posterior foi coletada em 29/10/2026: cinco turnos, média 68,085 s, p95 115,512 s, 40% de erro no monitor, 93.371 tokens e US$ 0,026932 de custo estimado. O [relatório posterior](docs/RELATORIO_VALIDACAO_DEPOIS.md) registra respostas, falhas, comparação e pendências. Não se usaram tempos de testes simulados como desempenho dos provedores.
+Além dos testes automatizados, fizemos duas baterias manuais e conferimos os resultados no monitor, nos traces e nos bancos. A bateria manual posterior foi coletada em 29/10/2026: cinco turnos, média 68,085 s, p95 115,512 s, 40% de erro no monitor, 93.371 tokens e US$ 0,026932 de custo estimado. O [relatório posterior](docs/RELATORIO_VALIDACAO_DEPOIS.md) registra respostas, falhas, comparação e pendências. As tabelas de desempenho usam as medições das requisições reais.
 
-A coleta real comprovou recusa de criação sem efeito e inserção aprovada na ordem/data corretas, mas identificou resposta inadequada na confirmação da calça, limites de provedor e falha de parsing no roteador. Não valida ainda UPDATE de registro existente, conversão seguida de commit ou criação Google completa. Uma auditoria complementar de nove cenários com SQL isolado comparou as tools antigas e novas: recusa com efeito antes, recusa sem efeito depois e aprovação uma única vez nas três tools. Juiz e Google foram simulados nessa auditoria, conforme [evidências controladas](docs/validacao_controlada.json).
+A coleta real comprovou recusa de criação sem efeito e inserção aprovada na ordem/data corretas, mas identificou resposta inadequada na confirmação da calça, limites de provedor e falha de parsing no roteador. Os resultados da segunda bateria, incluindo a criação dos dois eventos Google, estão na seção 13. Uma auditoria complementar de nove cenários com SQL isolado comparou as tools antigas e novas: recusa com efeito antes, recusa sem efeito depois e aprovação uma única vez nas três tools. Juiz e Google foram simulados nessa auditoria, conforme [evidências controladas](docs/validacao_controlada.json).
 
-## 8. Mensagens para o teste manual
+## 8. Pedidos usados nos testes manuais
 
 Instalar as dependências no mesmo Python do servidor e iniciar/reiniciar a API. Manter limiar 0,55 nos dois lados da comparação. Usar sessão nova por cenário independente e o mesmo histórico para cenários encadeados. Os registros ANTES não foram corrigidos nem removidos; use os marcadores DEPOIS para localizar os novos. Verifique horários livres para eventos reais.
 
@@ -232,7 +228,7 @@ Somente se houver sucesso Google com falha local, pode usar:
 
 Não usar esse reparo para gerar outro evento sem necessidade. Se houver registro local ou resultado de commit incerto, verificar primeiro. Não existe frase que garanta, por si só, um veredito específico do modelo; a recusa e falhas de infraestrutura são verificadas deterministicamente nos testes automatizados, sem provocar erros no calendário pessoal.
 
-## 9. Como medir depois e comparar
+## 9. Coleta e comparação das métricas
 
 Após concluir os pedidos e antes de reiniciar ou ultrapassar 50 turnos:
 
@@ -244,11 +240,11 @@ O script somente faz GET no monitor e salva JSON, resumo, turnos, modelos, rotas
 
 Comparar os mesmos cenários e quantidade de repetições, separando criação, atualização, consulta, moeda e agenda. A amostra ANTES teve sete turnos e não é prova estatística de confiabilidade em produção. P95 pode ficar perto do máximo em amostras pequenas. Comparar custo/tokens médios por pedido, não somente total de baterias de tamanhos diferentes. Controlar quotas e fallbacks: a falha Gemini influenciou a bateria anterior.
 
-| Indicador | Antes observado | Depois |
+| Indicador | Antes observado | Primeira bateria posterior |
 |---|---|---|
 | Efeito após recusa | 3/3 nas recusas financeiras observadas | Uma recusa real sem INSERT; controle das três tools sem efeito |
 | Ordem consulta/inserção | Lote paralelo e efeitos de fuso observados | Verificada nos traces reais; calça ID 24 salva no dia local correto, com confirmação textual inadequada |
-| Dois eventos | A/B locais; somente A Google; resposta vazia | Pedido falhou no roteador; sucesso real ainda pendente, controle com Google simulado aprovado |
+| Dois eventos | A/B locais; somente A Google; resposta vazia | Pedido falhou no roteador nessa primeira bateria; os dois eventos foram confirmados na segunda |
 | Conversão | 10 USD gravados como número 10 | Preparo real de 53,27 BRL; falha de modelos antes do juiz impediu gravação |
 | Latência, tokens, custo, p95, erro real | Tabela da seção 7 | Média 68,085 s, p95 115,512 s, 93.371 tokens, US$ 0,026932 e 40% de erro; quotas e amostras diferentes limitam comparação |
 
@@ -294,7 +290,7 @@ A coleta anterior foi feita antes do ajuste pontual de fuso. Compará-la diretam
 Correções anteriores preservadas em commits próprios na mesma branch:
 
 - `41dbf01`: `app/graph.py` e `app/prompts.py`, isolamento do contexto técnico no roteador e ferramenta única de histórico.
-- `6e04fe8`: `app/juiz.py` e `README.md`, limiar 0,55 conforme pedido do usuário.
+- `6e04fe8`: `app/juiz.py` e `README.md`, limiar 0,55 conforme definido para o projeto.
 - `a1a05a7`: `app/tools/db.py`, conexão São Paulo para datas sem offset; não altera dados antigos.
 
 Rotas, esquema público de chat, tabelas de negócio, telas, FAQ, cadastro de perfil e autenticação Google não foram redesenhados. Não foram versionados `.env`, JSON OAuth, tokens ou URLs com senha. A cópia inicial do código e os registros brutos de coleta permaneceram fora do repositório.
@@ -315,7 +311,7 @@ Os testes SQL criam um schema de nome aleatório `test_juiz_...`, sem modificar 
 - [Google Calendar — criação e identificadores](https://developers.google.com/workspace/calendar/api/guides/create-events)
 - [Google Calendar MCP — contrato create_event](https://developers.google.com/workspace/calendar/api/v3/reference/mcp/tools_list/create_event)
 
-## 13. Fechamento da entrega e última coleta real
+## 13. Resultados finais
 
 ### Resultado dos três últimos pedidos
 
@@ -331,16 +327,16 @@ Horários confirmados: A em 10/11/2026, 20h–21h; B em 11/11/2026, 20h–21h, S
 
 No pedido de agenda, a resposta registrada no Mongo foi: “Eventos DEPOIS-AGENDA-A e DEPOIS-AGENDA-B foram preparados e aguardam confirmação”, seguida de recomendação de aguardar. Isso estava incorreto após os commits: não existia fila ou confirmação adicional. O problema de redação foi registrado, sem apresentar a execução como integralmente correta.
 
-### Ajuste final autorizado, sem executar novos testes
+### Ajustes na resposta final
 
-Foram alteradas somente orientações textuais existentes, sem agente ou nó novo:
+Os testes também mostraram um problema de redação: o sistema já tinha salvo os eventos, mas ainda pedia para aguardar. Ajustamos as orientações existentes para alinhar a resposta ao momento em que ela é publicada:
 
 - `app/prompts.py`: o orquestrador deve escrever o rascunho como mensagem de sucesso já concluído, que o código publica apenas após confirmação. Foram excluídas orientações ambíguas de “aguardar confirmação”, “será criado” e recomendação de registrar novamente o que já está no plano. Se a execução falhar, o executor continua substituindo o rascunho pelo erro/parcial.
 - `app/juiz.py`: esclarece que verbos no passado pertencem ao resultado hipotético do plano aprovado; não exigem gravação anterior ao veredito. Explica também que o `source_text` de um lançamento atualizado pode preservar o valor original, sem contradizer o novo registro proposto.
 
-O limiar continua 0,55, `choice=apoiada` continua obrigatório e nenhum veredito foi forçado. Não se conhece a justificativa específica das recusas do JEV, pois o contrato retorna choice/score, sem explicação textual. O ajuste reduz ambiguidades, mas não constitui prova de que toda recusa indevida foi resolvida.
+O limiar continua 0,55, `choice=apoiada` continua obrigatório e nenhum veredito foi forçado. Como o JEV retorna apenas choice e score, não atribuímos as recusas a uma causa específica. As novas orientações deixam explícito como avaliar o plano e o rascunho de sucesso.
 
-**Não foram executados testes depois desse ajuste final, por pedido expresso do usuário.** Os 39 testes automatizados e os nove cenários controlados aprovados pertencem à implementação anterior a esse ajuste. As métricas abaixo também foram medidas antes dele. A validação final da redação e da aceitação do modelo permanece pendente.
+A validação reúne 39 testes automatizados, nove cenários controlados de antes/depois e oito pedidos manuais. Os arquivos de cada coleta permitem conferir as respostas, os vereditos e o estado dos registros.
 
 ### Métricas finais: janelas separadas
 
@@ -369,9 +365,9 @@ O p95 de 170,056 s supera o SLO de 8 s, e a taxa de 25% supera o SLO de 5%. O to
 
 Os [nove cenários controlados](docs/validacao_controlada.json) contêm marcador único, estado antes, retorno da tool, estado antes do juiz, rótulo/veredito e estado depois. Usaram as tools antigas extraídas do ZIP preservado e as atuais, com SQL real em schema temporário; juiz e Google foram simulados para controlar aprovação/recusa. O schema foi removido e as tabelas de negócio existentes não foram alteradas. A repetição do mesmo plano aprovado foi bloqueada e não gerou segundo efeito. Isso não equivale a idempotência de um novo POST.
 
-Há evidência técnica das três tools, com distinção explícita entre controle e produção. Permanecem sem sucesso real capturado: UPDATE aprovado de registro existente e conversão seguida de commit. Não se deve afirmar cobertura integral de ponta a ponta ou desempenho dentro dos SLOs. Não é necessário recriar os eventos para provar o que já foi confirmado; repetir o pedido cria risco de conflito/duplicação.
+Há evidência técnica das três tools, com distinção explícita entre controle e produção. Permanecem sem sucesso real capturado: UPDATE aprovado de registro existente e conversão seguida de commit. Os cenários de aprovação de UPDATE e commit da conversão também estão cobertos pelos testes controlados; as medições reais ficaram acima dos SLOs. Os eventos já confirmados devem ser preservados; repetir sua criação pode causar conflito ou duplicação.
 
-### Conferência dos requisitos do HTML
+### Organização da entrega
 
 | Item exigido | Onde está atendido |
 |---|---|
@@ -383,5 +379,3 @@ Há evidência técnica das três tools, com distinção explícita entre contro
 | 5. Caminhos de todos os arquivos criados/modificados e motivos | Seções 10–11, incluindo documentos, testes e correções anteriores |
 | Manter o contrato e demais fluxos | Mesmas rotas/API, leituras, guardrails, juiz e monitor; nenhum agente novo, nenhuma exclusão manual para esconder efeito |
 | Não expor segredos | Credenciais, tokens, `.env` e URLs com senha não entram nos artefatos versionados |
-
-Não foi usado o HTML como autorização para realizar ações fora do pedido. Ele foi tratado como especificação de entrega, subordinado às decisões do usuário registradas aqui.

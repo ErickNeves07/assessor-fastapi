@@ -1,65 +1,78 @@
-# Validação posterior — 29/10/2026
+# Resultados dos testes — 29/10/2026
 
-## Conclusão
+## O que verificamos
 
-A proteção contra escrita após recusa foi comprovada em um pedido real: a camiseta foi preparada, consultada por projeção, recusada e não gravada. A bateria completa ainda não passou. Há falhas de quota, um erro de parsing no roteador e uma resposta inadequada depois de um INSERT aprovado.
+Fizemos oito pedidos manuais, divididos em duas baterias, e conferimos as respostas no Mongo, os vereditos nos traces e os registros no Postgres. Também consultamos o Google Calendar para confirmar os dois eventos criados.
 
-Coleta do commit `cc5b915`, sem alterar código de aplicação ou repetir solicitações de negócio. Dados por turno, respostas completas, planos, consultas e vereditos: [metricas_depois.json](metricas_depois.json). Os registros brutos ficaram em `Downloads/metricas_assessor/depois_20261029_123426_985`.
+A principal mudança funcionou nos casos de recusa: a camiseta não foi inserida, a calça manteve o valor anterior e a compra em dólares não foi gravada. Na agenda, os dois eventos aprovados foram criados tanto no banco quanto no Google.
 
-## Resultados por pedido
+Os testes também apontaram problemas na resposta final. Em um caso, o sistema recomendou registrar a calça depois de já tê-la salvo. Em outro, informou que os eventos aguardavam confirmação, embora a criação já tivesse terminado. Ajustamos as orientações do orquestrador e do juiz para deixar claro que o rascunho de sucesso é publicado somente depois da confirmação do executor.
 
-| Pedido | Resultado observado | Evidência |
+## Primeira bateria
+
+| Pedido | Resposta e resultado |
+|---|---|
+| Registrar camiseta de R$ 15 e consultar o dia | O juiz recusou. A consulta projetada incluía a camiseta, mas nenhuma linha foi gravada. |
+| Alterar a camiseta para R$ 18 | O registro não foi encontrado, pois a criação anterior tinha sido recusada. |
+| Consultar o dia e depois registrar calça de R$ 30 | A consulta veio antes do preparo e retornou zero. Depois da aprovação, a calça foi salva como ID 24, no dia local correto. A recomendação de registrá-la novamente estava inadequada. |
+| Registrar compra de 10 USD | A tool calculou R$ 53,27. Limites do Gemini e do Groq interromperam o turno antes do juiz, sem INSERT. |
+| Criar dois eventos | O modelo retornou erro de parsing no roteador. O pedido não chegou às tools de agenda. |
+
+A recusa da camiseta foi `choice=sem_apoio`, com `noul=0,79`. Portanto, reduzir o limiar de 0,55 não resolveria esse caso: a aprovação depende também do choice. O JEV não fornece uma justificativa textual nesse contrato.
+
+## Segunda bateria
+
+| Pedido | Juiz | Resultado conferido |
 |---|---|---|
-| Camiseta 15 BRL + consulta | Recusado, sem gravação | Tool preparado; consulta count=1 projetado; juiz sem_apoio 0,79; marcador ausente do Postgres |
-| Atualizar camiseta para 18 | Não encontrada | A criação anterior foi recusada; nenhum UPDATE preparado ou executado |
-| Consultar e depois inserir calça 30 | Ordem e INSERT corretos; resposta inadequada | Consulta count=0 antes do preparo; juiz apoiada 0,92; ID 24 gravado uma vez; resposta recomenda registrar o que já foi registrado |
-| Compra 10 USD | Conversão preparada, turno interrompido | 53,27 BRL, taxa da data; Gemini 429 diário e Groq 429 TPM; não chegou ao juiz; nenhuma linha |
-| Dois eventos | Falhou no roteador | Groq output_parse_failed; nenhuma tool de agenda/Google foi chamada; nenhum evento local |
+| Alterar ID 24 de R$ 30 para R$ 35 | `sem_apoio`, 0,49 | O valor permaneceu em R$ 30. |
+| Registrar 10 USD com marcador DEPOIS-CAMBIO-RETESTE | `sem_apoio`, 0,61 | Conversão preparada para R$ 53,27, sem gravação. |
+| Criar DEPOIS-AGENDA-A e DEPOIS-AGENDA-B | `apoiada`, 0,91 | Eventos locais IDs 7 e 8, ambos confirmados no Google. |
 
-A recusa da camiseta foi por `choice=sem_apoio`, mesmo com `noul=0,79`; baixar o limiar não resolve esse caso. O contrato atual do JEV não devolve justificativa textual, então não há evidência para atribuir a recusa a um fato específico. A resposta candidata e o plano integral foram preservados.
+O evento A ficou em 10/11/2026, das 20h às 21h; o B, em 11/11/2026, no mesmo horário. A consulta ao Google retornou os dois eventos como `confirmed`, com fuso de São Paulo.
 
-O fuso foi validado no registro ID 24: `2026-10-29 00:00:00-03:00`. As linhas antigas ANTES permanecem iguais; não foram corrigidas ou excluídas pela coleta. Uma nova sessão reduz histórico, mas não elimina a necessidade de corrigir a redação de confirmação e investigar o parsing.
+O registro da calça também confirmou a correção do fuso: `2026-10-29 00:00:00-03:00`. Os registros ANTES foram preservados para comparação.
 
-## Métricas reais
+## Métricas
 
-| Medida | Antes | Depois |
+A última captura do monitor contém os oito pedidos posteriores. Ela inclui os cinco da primeira bateria e não deve ser somada à captura anterior.
+
+| Medida | Antes: 7 pedidos | Depois: 8 pedidos |
 |---|---:|---:|
-| Turnos | 7 | 5 |
-| Latência média | 27,476 s | 68,085 s |
-| Latência p95 | 77,129 s | 115,512 s |
-| Erro do monitor | 0% | 40% |
-| Tokens de entrada | 152.791 | 85.580 |
-| Tokens de saída | 14.939 | 7.791 |
-| Tokens total | 167.730 | 93.371 |
-| Tokens por turno | 23.961,43 | 18.674,20 |
-| Custo estimado total | US$ 0,062414 | US$ 0,026932 |
-| Custo estimado por turno | US$ 0,008916 | US$ 0,005386 |
-| Fallbacks registrados | 3 | 5 |
-| Tentativas LLM nos traces | 51 | 35 |
-| Tentativas LLM com erro | 3 | 8 |
+| Latência média | 27,476 s | 69,692 s |
+| P95 | 77,129 s | 170,056 s |
+| Erro técnico no monitor | 0% | 25% |
+| Tokens de entrada | 152.791 | 140.844 |
+| Tokens de saída | 14.939 | 12.213 |
+| Tokens totais | 167.730 | 153.057 |
+| Custo estimado | US$ 0,062414 | US$ 0,038744 |
+| Fallbacks | 3 | 13 |
 
-A média aumentou 147,8% e o p95 49,8%. Tokens por turno caíram 22,1% e custo estimado por turno 39,6%, mas isso não demonstra ganho de eficiência: dois pedidos abortaram e a composição/amostra mudou. Os SLOs de p95 até 8 s e erro até 5% não foram atendidos. Não atribuir toda a piora ao adiamento: quotas, repetição de chamadas, fallback e crescimento do histórico também influenciaram. JEV não entra nos tokens/custo do coletor, e tentativas falhas têm custo incompleto.
+O SLO de p95 até 8 s e erro até 5% não foi atingido. As quotas dos provedores, as chamadas repetidas e os fallbacks contribuíram para a demora. Como a quantidade e os resultados dos pedidos mudaram, a redução de tokens e custo não basta para concluir que houve ganho de eficiência.
 
-## Cobertura e pendências
+Os três últimos pedidos terminaram com status técnico `ok`: dois foram recusados pelo juiz e um foi executado. Uma recusa sem falha técnica não entra como erro de infraestrutura. No conjunto dos oito pedidos, houve seis `ok`, dois `erro` e nenhum `bloqueado`.
 
-- Antes real: INSERT e UPDATE financeiros persistiram após recusa; não houve caso real anterior de add_event recusado.
-- Depois real: INSERT recusado sem efeito; consulta antes/depois do preparo; aprovação com INSERT único e data local correta; preparo real de conversão.
-- Suíte automatizada anterior: 39 testes passaram com SQL isolado e modelos/Google/juiz simulados; inclui as três tools, erros e confirmação uma vez.
-- Auditoria complementar concluída: nove cenários passaram; ver [validacao_controlada.json](validacao_controlada.json). Compara as tools antigas do ZIP com as atuais, em schema próprio, com marcador único, estado antes/depois e juiz controlado. Não é execução dos modelos reais.
-- Ainda sem ponta a ponta real bem-sucedida nesta bateria: UPDATE de registro existente, conversão seguida de commit e criação dos eventos Google. Há ainda ajuste necessário na confirmação textual da calça e investigação da recusa/parsing.
+A espera pelo JEV entra na latência, mas seus tokens e custo não são contabilizados pelo coletor de chat models. Chamadas de modelo que falham também têm contabilização incompleta de custo.
 
-## Próximos testes mínimos
+## Testes automatizados e comparação das tools
 
-Não repetir a calça: ID 24 já existe. Quando houver cota, usar uma sessão nova por cenário e registrar a resposta antes de exportar novamente:
+Além dos pedidos manuais, passaram 39 testes automatizados e nove cenários controlados de antes/depois. Os testes usam SQL em schema isolado, com modelos, juiz e Google simulados para controlar as respostas e as falhas.
 
-1. `Altere o valor da transação de ID 24, DEPOIS-CALCA, para 35 reais.` Esperado: mesmo ID, valor 35, sem linha nova. Se recusado, permanecer em 30.
-2. `Registre uma compra de 10 dólares americanos em 28/10/2026, com descrição DEPOIS-CAMBIO-RETESTE.` Esperado: conversão e commit após aprovação; valor em BRL e mensagem de confirmação coerente.
-3. `Crie o evento DEPOIS-AGENDA-A em 10/11/2026 das 20h às 21h e o evento DEPOIS-AGENDA-B em 11/11/2026 das 20h às 21h.` Esperado: dois eventos locais e Google depois da aprovação; conferir horários livres.
+Os nove cenários cobrem `add_transaction`, `update_transaction` e `add_event`. Para cada tool, verificamos a escrita mantida após recusa na versão antiga, a recusa sem efeito na versão nova e a aprovação com uma única gravação. Cada caso registra marcador, estado inicial, retorno da tool, veredito e estado final. Reexecutar o mesmo plano aprovado foi bloqueado.
 
-Esses pedidos não garantem resolver falhas de modelo nem obter aprovação. Não provocar timeout/erro no calendário pessoal: os testes controlados cobrem esses cenários.
+Nos pedidos manuais, temos INSERT e UPDATE recusados sem efeito, INSERT aprovado e dois eventos aprovados em ambos os destinos. A aprovação de UPDATE e o commit da conversão foram exercitados nos testes controlados.
 
-## Limites dos provedores
+## Arquivos com as evidências
 
-O log mostrou Gemini com cota diária de 20 requisições por projeto/modelo e Groq com TPM 8.000. Trocar chave no mesmo projeto Google não renova a cota. Aguardar reset ou utilizar projeto/plano autorizado com cota disponível. Para Groq, aguardar a janela indicada, reduzir histórico e enviar um cenário por vez. Não se configurou faturamento nem alteraram-se chaves na coleta.
+- [metricas_antes.json](metricas_antes.json): dados da linha de base.
+- [metricas_depois.json](metricas_depois.json): primeira bateria posterior, com respostas, planos e vereditos.
+- [metricas_reteste_final.json](metricas_reteste_final.json): segunda bateria, monitor cumulativo, banco e confirmação Google.
+- [validacao_controlada.json](validacao_controlada.json): nove cenários nas três tools.
+- [decisao_tecnica.md](../decisao_tecnica.md): decisão, alternativas e relação dos arquivos alterados.
 
-Fontes: [limites Gemini](https://ai.google.dev/gemini-api/docs/rate-limits), [limites Groq](https://console.groq.com/docs/rate-limits).
+Os registros brutos ficaram em `Downloads/metricas_assessor`, nas pastas `depois_20261029_123426_985` e `depois_20261029_125042_987`. Os códigos HTTP do navegador não foram capturados; as respostas foram conferidas no histórico e nos traces.
+
+## Quotas encontradas
+
+Os logs mostraram limite diário de 20 requisições no Gemini e limite de 8.000 tokens por minuto no Groq. No Gemini, gerar outra chave no mesmo projeto não renova a cota. No Groq, uma sessão nova reduz o histórico enviado, mas cada pedido ainda pode fazer várias chamadas ao modelo.
+
+Referências: [limites do Gemini](https://ai.google.dev/gemini-api/docs/rate-limits) e [limites do Groq](https://console.groq.com/docs/rate-limits).

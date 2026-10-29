@@ -133,7 +133,7 @@ são convertidas para BRL com `CurrencyConverter`, usando a data da transação 
 última cotação anterior disponível. A taxa é congelada durante o turno; não há
 coluna nova nem persistência adicional de metadados. Sem cotação, pedir valor em BRL.
 
-A decisão, o inventário de arquivos, as limitações e as mensagens de teste estão
+A decisão, os motivos das mudanças, os arquivos alterados e os pedidos de teste estão
 em [decisao_tecnica.md](decisao_tecnica.md). A implementação não usa wrappers.
 
 ## Sessões e ferramentas
@@ -174,5 +174,6 @@ Depois de enviar a bateria manual no chat, exporte o monitor antes de reiniciar:
 
 Os arquivos são salvos em `Downloads\metricas_assessor`. O monitor guarda somente
 50 turnos no processo atual. As medições anteriores estão em
-[docs/metricas_antes.json](docs/metricas_antes.json); medições simuladas não substituem
-latência, tokens e custo dos testes reais posteriores.
+[docs/metricas_antes.json](docs/metricas_antes.json). Os resultados das duas baterias
+manuais e dos testes automatizados estão em
+[docs/RELATORIO_VALIDACAO_DEPOIS.md](docs/RELATORIO_VALIDACAO_DEPOIS.md).

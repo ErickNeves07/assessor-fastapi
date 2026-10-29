@@ -11,7 +11,7 @@ from app.config import TYPESAFE_API_KEY
 
 JEV_URL = "https://api.typesafe.ai/v1/systemone"
 JEV_MODELO = "jev-latest"
-LIMIAR = 0.70
+LIMIAR = 0.55
 FRASE_SEGURA = "Não tenho evidência para afirmar isso."
 
 REGRAS = (

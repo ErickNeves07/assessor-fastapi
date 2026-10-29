@@ -119,7 +119,7 @@ e compare o trace do mesmo turno. Os preços estimados podem diferir da fatura.
 que passam pelo juiz devolvem `Não tenho evidência para afirmar isso.`
 Financeiro e agenda passam por orquestrador, guardrail de saída e juiz;
 FAQ passa diretamente pelo juiz, como no roteiro. O juiz mantém a resposta
-somente com `choice=apoiada` e `noul >= 0.70`.
+somente com `choice=apoiada` e `noul >= 0.55`.
 
 O juiz avalia a frase depois das ferramentas. Ele não desfaz uma escrita já
 confirmada no banco. Tratamento de moedas e controle de escritas recusadas

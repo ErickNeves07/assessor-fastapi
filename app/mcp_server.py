@@ -1,4 +1,9 @@
 import sys
+import json
+import uuid
+from contextlib import redirect_stdout
+from datetime import datetime
+from types import SimpleNamespace
 from pathlib import Path
 from typing import Annotated, Any, Optional
 
@@ -9,6 +14,11 @@ if str(BASE_DIR) not in sys.path:
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 from pydantic import Field
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from app.cambio import moedas_explicitas
+from app.execucao import executar_plano
+from app.juiz import FRASE_SEGURA, no_juiz
+from app.planejamento import ContextoTurno, FUSO, dados_json
 
 from app.tools.financeiro import (
     add_transaction as _add_transaction,
@@ -26,6 +36,35 @@ mcp = MCPServer(
 
 LEITURA = ToolAnnotations(readOnlyHint=True)
 ESCRITA = ToolAnnotations(readOnlyHint=False, destructiveHint=False)
+
+
+def _concluir_escrita(ferramenta, argumentos):
+    pergunta = argumentos.get("source_text") or "Altere o lançamento financeiro conforme estes dados: " + json.dumps(argumentos, ensure_ascii=False)
+    contexto = ContextoTurno("mcp", uuid.uuid4().hex, pergunta)
+    try:
+        moedas = moedas_explicitas(pergunta)
+        argumentos = {**argumentos, "currency": next(iter(moedas)) if len(moedas) == 1 else "BRL"}
+        dados = ferramenta.args_schema.model_validate(argumentos).model_dump()
+        preparo = ferramenta.func(**dados, runtime=SimpleNamespace(context=contexto))
+        if preparo.get("status") != "preparado":
+            return preparo
+        plano = contexto.plano.fechar()
+        rascunho = "Operação financeira registrada com os valores em BRL e os dados do plano aprovado."
+        estado = {"plano_turno": plano, "messages": [HumanMessage(content=pergunta),
+            AIMessage(content="", tool_calls=[{"name": ferramenta.name, "args": dados_json(dados), "id": "mcp-preparo"}]),
+            ToolMessage(content=json.dumps(preparo, ensure_ascii=False), tool_call_id="mcp-preparo", name=ferramenta.name),
+            AIMessage(content=rascunho)]}
+        with redirect_stdout(sys.stderr):
+            julgamento = no_juiz(estado)
+        resultado = executar_plano(contexto.plano, julgamento["veredito_juiz"])
+        if resultado.status != "ok":
+            return {"status": "error", "message": resultado.mensagem or FRASE_SEGURA}
+        item = resultado.itens[-1]
+        registro = contexto.plano.operacoes[-1].dados["registro"]
+        return {"status": "ok", "id": item["id"], "occurred_at": registro["occurred_at"],
+                "rows_affected": 1, "updated": {**registro, "id": item["id"]}}
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
 
 @mcp.tool(
     name="total_balance",
@@ -54,7 +93,7 @@ def add_transaction(
     type_id: Annotated[Optional[int], Field(description="ID do tipo.")] = None,
     category_id: Annotated[Optional[int], Field(description="ID da categoria.")] = None
 ) -> dict[str, Any]:
-    return _add_transaction.invoke({
+    return _concluir_escrita(_add_transaction, {
         "amount": amount,
         "source_text": source_text,
         "type_name": type_name,
@@ -85,7 +124,7 @@ def update_transaction(
     payment_method: Annotated[Optional[str], Field(description="Método de pagamento.")] = None,
     occurred_at: Annotated[Optional[str], Field(description="Data e hora da ocorrência.")] = None,
 ) -> dict[str, Any]:
-    return _update_transaction.invoke({
+    return _concluir_escrita(_update_transaction, {
         "id": id,
         "match_text": match_text,
         "date_local": date_local,
@@ -127,7 +166,7 @@ def query_transactions(
     annotations=LEITURA,
 )
 def daily_balance() -> dict[str, Any]:
-    return _daily_balance.invoke({})
+    return _daily_balance.invoke({"date_local": datetime.now(FUSO).date().isoformat()})
 
 if __name__ == "__main__":
     from app.config import DATABASE_URL

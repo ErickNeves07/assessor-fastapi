@@ -8,8 +8,9 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from langchain.tools import tool
+from langchain.tools import ToolRuntime, tool
 from pydantic import BaseModel, Field, model_validator
+from app.planejamento import ContextoTurno, horario, obter_plano, preparado
 
 from app.config import (
     BASE_DIR,
@@ -141,14 +142,14 @@ def _executar(coro_factory) -> dict:
 
 
 def _normalizar_evento(data: dict) -> dict:
-    if data.get("status") == "error":
+    if data.get("status") in ("error", "incerto"):
         return data
     evento = data
     for chave in ("event", "result"):
         if isinstance(evento.get(chave), dict):
             evento = evento[chave]
     if not evento.get("id"):
-        return {"status": "error", "message": "O Google não confirmou a criação com um ID de evento."}
+        return {"status": "incerto", "message": "O Google não confirmou a criação com um ID de evento. Confira o calendário antes de repetir."}
     inicio = evento.get("start") or {}
     return {
         "status": "ok",
@@ -181,7 +182,7 @@ def _criar_via_rest(payload: dict, token: str) -> dict:
                     "http_status": resposta.status_code}
         return _normalizar_evento(data)
     except (httpx.HTTPError, ValueError) as exc:
-        return {"status": "error", "message": f"Falha na Calendar API: {type(exc).__name__}. Confira o calendário antes de repetir."}
+        return {"status": "incerto", "message": f"Não consegui confirmar a criação: {type(exc).__name__}. Confira o calendário antes de repetir."}
 
 
 def chamar_google_calendar(nome_tool: str, argumentos: dict) -> dict:
@@ -195,7 +196,7 @@ def chamar_google_calendar(nome_tool: str, argumentos: dict) -> dict:
         resultado = _executar(lambda: _chamar_via_http(nome_tool, argumentos, token))
     except Exception as exc:
         resultado = {"status": "error", "message": _motivo(exc), "http_status": _status_http(exc)}
-    if resultado.get("status") != "error":
+    if resultado.get("status") not in ("error", "incerto"):
         return _normalizar_evento(resultado)
     mensagem = str(resultado.get("message", "")).lower()
     desabilitado = resultado.get("http_status") == 403 or any(
@@ -203,6 +204,8 @@ def chamar_google_calendar(nome_tool: str, argumentos: dict) -> dict:
     )
     if nome_tool == "create_event" and desabilitado:
         return _criar_via_rest(argumentos, token)
+    if resultado.get("http_status") is None or resultado.get("http_status", 0) >= 500:
+        return {**resultado, "status": "incerto"}
     return resultado
 
 
@@ -239,12 +242,26 @@ class AddGoogleEventArgs(BaseModel):
 @tool(
     "add_google_event",
     args_schema=AddGoogleEventArgs,
-    description="Cria no Google Calendar após add_event confirmar a gravação no Postgres. "
-                "Não grava no banco local. Se falhar, preserve o evento local e informe a falha.",
+    description="Prepara a criação Google vinculada a um add_event deste turno. "
+                "Não chama a API; a criação real aguarda o juiz. add_event já inclui essa intenção automaticamente.",
 )
 def add_google_event(title: str, start_time: str, end_time: str | None = None,
-                     location: str | None = None, description: str | None = None) -> dict:
-    fim = end_time or (datetime.fromisoformat(start_time) + timedelta(hours=1)).isoformat()
+                     location: str | None = None, description: str | None = None,
+                     runtime: ToolRuntime[ContextoTurno] = None) -> dict:
+    plano = obter_plano(runtime)
+    inicio = horario(start_time, plano.agora)
+    fim = horario(end_time, plano.agora) if end_time else inicio + timedelta(hours=1)
+    for op in plano.operacoes:
+        if op.tipo == "add_google_event" and op.dados["title"] == title and horario(op.dados["start_time"], plano.agora) == inicio:
+            if horario(op.dados["end_time"], plano.agora) != fim or (op.dados.get("location") or None) != (location or None) or (op.dados.get("description") or None) != (description or None):
+                return plano.falha("Os dados Google divergem do evento preparado; nenhuma chamada foi executada.")
+            return preparado(op)
+    return plano.falha("Prepare o evento com add_event antes de solicitar sua criação Google.")
+
+
+def criar_google_aprovado(title: str, start_time: str, end_time: str,
+                         location: str | None = None, description: str | None = None) -> dict:
+    fim = end_time
     payload = {"summary": title, "startTime": start_time, "endTime": fim, "timeZone": "America/Sao_Paulo"}
     if location:
         payload["location"] = location

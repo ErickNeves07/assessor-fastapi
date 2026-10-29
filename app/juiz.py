@@ -4,6 +4,7 @@ Quem decide é o JEV: choice e noul, sem redação.
 A frase fixa, quando entra, é deste arquivo.
 """
 import json
+import math
 import urllib.error
 import urllib.request
 
@@ -21,7 +22,8 @@ REGRAS = (
     "Esclarecimento, saudação, oferta de ajuda, sugestão de próximo passo "
     "e ausência de registro contam como apoiada. "
     "Opinião do usuário pode ser citada como fala dele. "
-    "A moeda de cada valor é a que aparece no source_text ou na fala do usuário. "
+    "Valores estruturados com currency usam a moeda declarada nesse campo; "
+    "para valores originais ainda não convertidos, respeite a moeda da fala ou do source_text. "
     "Moeda trocada, valores de moedas diferentes somados num total só, "
     "opinião dita como fato do sistema, número, data, telefone ou regra "
     "que não saiam da evidência contam como sem_apoio."
@@ -30,7 +32,18 @@ REGRAS = (
     "Ao avaliar agenda, compare o instante, não apenas os dígitos da hora. "
     "Se query_events retornou evento no intervalo pedido, informar conflito é apoiado. "
     "Pedir outro horário e oferecer consultar alternativas são próximos passos, "
-    "não afirmações de disponibilidade."
+    "não afirmações de disponibilidade. "
+    "Quando houver plano de operações, a resposta é um RASCUNHO condicionado à execução posterior: "
+    "avalie se as ações e a resposta correspondem ao pedido, às moedas, aos valores e à ORDEM solicitada. "
+    "Uma operação preparada ainda não está gravada: não exija ID real nem confunda preparação com execução. "
+    "Texto de sucesso só será publicado pelo código após confirmar as ações aprovadas. "
+    "Consultas são fotografias do passo em que ocorreram: incluem apenas operações preparadas ANTES delas. "
+    "Se o usuário pede consultar e depois inserir, a lista anterior não deve incluir a inserção posterior. "
+    "Conversão de moeda é apoiada quando o plano fornece valor original, taxa, fonte, data da cotação e BRL calculado. "
+    "Dados consultados com currency=BRL são valores já registrados em reais; source_text preserva a fala original "
+    "e não altera a moeda do campo amount retornado. Nunca aceite uma troca de moeda sem conversão comprovada no preparo. "
+    "Se o plano inclui várias ações, verifique todas, inclusive os destinos Google exigidos; "
+    "não aprove um rascunho vazio ou que omita partes necessárias para responder ao pedido."
 )
 
 
@@ -71,22 +84,21 @@ def _coleta(estado):
     evidencia = "\n\n".join(evidencias).strip()
     if not evidencia:
         evidencia = "(nenhuma tool devolveu conteúdo neste turno)"
-    return pergunta, resposta, evidencia[-6000:]
+    return pergunta, resposta, evidencia
 
 
-def _publicar(texto, rotulo, resposta_original):
+def _publicar(texto, rotulo, resposta_original, aprovado=False, tecnico=False):
     print(f"[juiz] {rotulo}")
+    resultado = {"agentes_chamados": [f"juiz:{rotulo}"],
+                 "veredito_juiz": {"aprovado": aprovado, "motivo": rotulo, "tecnico": tecnico}}
     if texto.strip() == (resposta_original or "").strip():
-        return {"agentes_chamados": [f"juiz:{rotulo}"]}
-    return {
-        "messages": [{"role": "assistant", "content": texto.strip()}],
-        "agentes_chamados": [f"juiz:{rotulo}"],
-    }
+        return resultado
+    return {**resultado, "messages": [{"role": "assistant", "content": texto.strip()}]}
 
 
 def _julgar_jev(pergunta, resposta, evidencia):
     if not TYPESAFE_API_KEY:
-        return _publicar(FRASE_SEGURA, "sem_chave", resposta)
+        return _publicar(FRASE_SEGURA, "sem_chave", resposta, tecnico=True)
     corpo = json.dumps({
         "model": JEV_MODELO,
         "state": {
@@ -127,22 +139,32 @@ def _julgar_jev(pergunta, resposta, evidencia):
         with urllib.request.urlopen(pedido, timeout=30) as resp:
             dados = json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
-        return _publicar(FRASE_SEGURA, f"erro http {exc.code}", resposta)
+        return _publicar(FRASE_SEGURA, f"erro http {exc.code}", resposta, tecnico=True)
     respostas = dados["answers"]
     choice = respostas["veredito"]["choice"]
     noul = float(respostas["apoiada"]["noul"])
+    if choice not in ("apoiada", "parcial", "sem_apoio") or not math.isfinite(noul) or not 0 <= noul <= 1:
+        raise ValueError("Veredito do juiz inválido.")
     if choice == "apoiada" and noul >= LIMIAR:
-        return _publicar(resposta, f"apoiada noul={noul:.2f}", resposta)
+        return _publicar(resposta, f"apoiada noul={noul:.2f}", resposta, aprovado=True)
     rotulo = "apoiada:abaixo_do_limiar" if choice == "apoiada" else choice
     return _publicar(FRASE_SEGURA, f"{rotulo} noul={noul:.2f}", resposta)
 
 
 def no_juiz(estado: dict) -> dict:
     pergunta, resposta, evidencia = _coleta(estado)
-    if not resposta:
-        return {"agentes_chamados": ["juiz:sem_resposta"]}
+    plano = estado.get("plano_turno") or {}
+    if plano:
+        evidencia += "\n\n[plano completo, somente preparado]\n" + json.dumps(plano, ensure_ascii=False)
     try:
-        return _julgar_jev(pergunta, resposta, evidencia)
+        if not resposta.strip() or resposta.strip() in ("(sem resposta)", FRASE_SEGURA):
+            resultado = _publicar(FRASE_SEGURA, "sem_resposta_valida", resposta)
+        elif len(evidencia) > 100000:
+            resultado = _publicar("O pedido ficou extenso demais para avaliar com segurança. Divida em pedidos menores.", "evidencia_extensa", resposta)
+        else:
+            resultado = _julgar_jev(pergunta, resposta, evidencia)
     except Exception as exc:
         print(f"[juiz] erro {exc}")
-        return _publicar(FRASE_SEGURA, "erro", resposta)
+        resultado = _publicar(FRASE_SEGURA, "erro", resposta, tecnico=True)
+    resultado["veredito_juiz"].update(turno_id=plano.get("turno_id"), hash_plano=plano.get("hash"))
+    return resultado

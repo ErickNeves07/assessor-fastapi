@@ -1,10 +1,15 @@
 import operator
+import hashlib
+import json
+import logging
+from dataclasses import asdict
 from typing import Annotated
 from langgraph.graph import StateGraph, END, MessagesState
 from langgraph.types import RunnableConfig
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, RemoveMessage
 from langchain.agents import create_agent
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.runtime import Runtime
 from app.memory import salvar_mensagem
 from app.observabilidade import abrir_turno, fechar_turno, status_do_estado
 
@@ -25,6 +30,8 @@ from app.guardrail import anonimizar_entrada, guardrail_entrada, guardrail_saida
 from app.llms import llm_rapido, llm_especialista
 
 from app.juiz import no_juiz
+from app.planejamento import ContextoTurno, dados_json, sessao_exclusiva
+from app.execucao import ResultadoExecucao, executar_plano
 
 # ==============================================================================
 # MODELOS E AGENTES  (sem checkpointer — a memória fica no grafo)
@@ -40,12 +47,14 @@ financeiro_app = create_agent(
     model=llm_especialista,
     tools=TOOLS + TOOLS_MEMORIA + TOOLS_PERFIL,
     system_prompt=FINANCEIRO_PROMPT_COMPLETO,
+    context_schema=ContextoTurno,
 )
 
 agenda_app = create_agent(
     model=llm_especialista,
     tools=TOOLS_MEMORIA + TOOLS_AGENDA + TOOLS_GOOGLE,
     system_prompt=AGENDA_PROMPT_COMPLETO,
+    context_schema=ContextoTurno,
 )
 
 orquestrador_app = create_agent(
@@ -70,6 +79,10 @@ class Estado(MessagesState):
     user_id:          str
     session_id:       str
     bloqueio_entrada: bool
+    plano_turno: dict
+    veredito_juiz: dict
+    resultado_execucao: dict
+    erro_tecnico: bool
 
 
 # ==============================================================================
@@ -123,25 +136,48 @@ def no_roteador(estado: Estado, config: RunnableConfig) -> dict:
         # Não adiciona nada ao messages — especialista lê histórico limpo
     }
 
-def no_orquestrador(estado: Estado, config: RunnableConfig) -> dict:
+def no_financeiro(estado: Estado, config: RunnableConfig, runtime: Runtime[ContextoTurno]) -> dict:
+    return financeiro_app.invoke({"messages": list(estado["messages"])},
+                                 config={**config, "max_concurrency": 1}, context=runtime.context)
+
+
+def no_agenda(estado: Estado, config: RunnableConfig, runtime: Runtime[ContextoTurno]) -> dict:
+    return agenda_app.invoke({"messages": list(estado["messages"])},
+                             config={**config, "max_concurrency": 1}, context=runtime.context)
+
+
+def no_orquestrador(estado: Estado, config: RunnableConfig, runtime: Runtime[ContextoTurno]) -> dict:
     ultima_especialista = ""
     for mensagem in reversed(estado["messages"]):
-        if mensagem.type == "ai" and mensagem.content:
-            ultima_especialista = mensagem.content
+        if mensagem.type == "human":
             break
-
-    saida = orquestrador_app.invoke({"messages": [{"role": "human", "content": ultima_especialista}]}, config=config)
+        if mensagem.type == "ai" and mensagem.text and not mensagem.tool_calls:
+            ultima_especialista = mensagem.text
+            break
+    plano = runtime.context.plano
+    if ultima_especialista.strip() or plano.operacoes or plano.passos or plano.erros:
+        entrada = json.dumps({"pedido": runtime.context.pergunta, "especialista": ultima_especialista,
+                              "plano_temporario": plano.conteudo()}, ensure_ascii=False)
+        saida = orquestrador_app.invoke({"messages": [{"role": "human", "content": entrada}]}, config=config)
+        resposta = saida["messages"][-1].text.strip()
+    else:
+        resposta = ""
+    if not resposta or resposta == "(sem resposta)":
+        plano.falha("Os modelos não produziram uma resposta válida para concluir o pedido. Nenhuma escrita foi executada.", tecnico=True)
+        resposta = plano.erros[-1]["mensagem"]
 
     return {
         "agentes_chamados": [estado["rota"], "orquestrador"],
-        "messages":         [{"role": "assistant", "content": saida["messages"][-1].content}],
+        "messages":         [{"role": "assistant", "content": resposta}],
+        "plano_turno":      plano.fechar(),
     }
 
-def no_guardrail_entrada(estado: Estado, config: RunnableConfig) -> dict:
+def no_guardrail_entrada(estado: Estado, config: RunnableConfig, runtime: Runtime[ContextoTurno]) -> dict:
     msg_original = estado["messages"][-1]
     anonimizado, mapa_pii = anonimizar_entrada(msg_original.content)
     resultado_guardrail = guardrail_entrada(anonimizado)
-    session_id = config["configurable"]["thread_id"]
+    session_id = runtime.context.session_id
+    runtime.context.pergunta = anonimizado
     salvar_mensagem(session_id, "human", anonimizado, estado["user_id"])
     if resultado_guardrail["bloqueado"]:
         return {
@@ -185,12 +221,12 @@ def decidir_pos_guardrail_entrada(estado: Estado) -> str:
 # ==============================================================================
 # CONSTRUÇÃO DO GRAFO
 # ==============================================================================
-grafo = StateGraph(Estado)
+grafo = StateGraph(Estado, context_schema=ContextoTurno)
 
 grafo.add_node("guardrail_entrada",     no_guardrail_entrada)  
 grafo.add_node("roteador",     no_roteador)
-grafo.add_node("financeiro",   financeiro_app)
-grafo.add_node("agenda",       agenda_app)
+grafo.add_node("financeiro",   no_financeiro)
+grafo.add_node("agenda",       no_agenda)
 grafo.add_node("faq",          faq_app)
 grafo.add_node("orquestrador", no_orquestrador)
 grafo.add_node("guardrail_saida",       no_guardrail_saida)
@@ -233,28 +269,50 @@ fluxo_agentes = grafo.compile(checkpointer=memory)
 # ==============================================================================
 # FLUXO PRINCIPAL
 # ==============================================================================
-def executar_fluxo_assessor(pergunta_usuario: str, session_id: str, user_id: str) -> str:
+def _executar_turno(pergunta_usuario: str, session_id: str, user_id: str, turno_id: str) -> str:
+    contexto = ContextoTurno(user_id=user_id, session_id=session_id, pergunta=pergunta_usuario)
+    chave = hashlib.sha256(f"{user_id}\0{session_id}".encode()).hexdigest()
+    config = {"configurable": {"thread_id": chave, "session_id": session_id, "user_id": user_id}}
     estado_inicial = {
         "messages":         [{"role": "human", "content": pergunta_usuario}],
         "agentes_chamados": [],
         "rota":             "",
         "mapa_pii":         {},
         "bloqueio_entrada": False,
-        "user_id":          user_id
+        "user_id":          user_id,
+        "plano_turno": {}, "veredito_juiz": {}, "resultado_execucao": {}, "erro_tecnico": False,
     }
 
-    turno_id = abrir_turno()
     status = "erro"
     rota = ""
 
     try:
         estado_final = fluxo_agentes.invoke(
             estado_inicial,
-            config={"configurable": {"thread_id": session_id, "user_id": user_id}}
+            config=config, context=contexto,
         )
         resposta = estado_final["messages"][-1].text
-
-        salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
+        resultado = ResultadoExecucao("ok")
+        if contexto.plano.operacoes or contexto.plano.erros:
+            resultado = executar_plano(contexto.plano, estado_final.get("veredito_juiz") or {})
+            if resultado.status not in ("ok", "recusado"):
+                resposta = resultado.mensagem
+        estado_final["erro_tecnico"] = resultado.tecnico or (estado_final.get("veredito_juiz") or {}).get("tecnico", False)
+        try:
+            ultima = estado_final["messages"][-1]
+            fluxo_agentes.update_state(config, {
+                "messages": [AIMessage(content=resposta, id=ultima.id)],
+                "resultado_execucao": dados_json(asdict(resultado)),
+                "plano_turno": {}, "veredito_juiz": {}, "erro_tecnico": estado_final["erro_tecnico"],
+            })
+        except Exception:
+            estado_final["erro_tecnico"] = True
+            logging.exception("Falha ao atualizar histórico do grafo; não reexecutar operações confirmadas.")
+        try:
+            salvar_mensagem(session_id, "assistant", resposta, user_id=user_id)
+        except Exception:
+            estado_final["erro_tecnico"] = True
+            logging.exception("Falha ao salvar resposta no Mongo; resultado de negócio preservado.")
 
         status = status_do_estado(estado_final)
         rota = estado_final.get("rota") or ""
@@ -262,3 +320,9 @@ def executar_fluxo_assessor(pergunta_usuario: str, session_id: str, user_id: str
         return resposta
     finally:
         fechar_turno(turno_id, session_id=session_id, rota=rota, status=status)
+
+
+def executar_fluxo_assessor(pergunta_usuario: str, session_id: str, user_id: str) -> str:
+    turno_id = abrir_turno()
+    with sessao_exclusiva(user_id, session_id):
+        return _executar_turno(pergunta_usuario, session_id, user_id, turno_id)

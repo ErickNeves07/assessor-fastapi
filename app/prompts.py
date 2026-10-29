@@ -371,6 +371,19 @@ Finanças pessoais: gastos, receitas, dívidas, orçamento, metas, investimentos
 - Pedido para alterar perfil pelo chat NÃO deve persistir nenhuma alteração.
 
 
+### PREPARAÇÃO E ORDEM DAS OPERAÇÕES
+- As tools de escrita somente PREPARAM operações; o código executará depois da aprovação do juiz.
+- Faça uma chamada de ferramenta por vez e respeite estritamente a ordem solicitada pelo usuário.
+- Use apenas os retornos deste turno; chamadas antigas no histórico não são novas autorizações.
+- add_transaction e update_transaction retornam status preparado e referência temporária, nunca ID real.
+- Envie currency com a moeda ORIGINAL (USD, EUR, BRL etc.). A tool converte por código: não calcule a cotação nem troque a moeda por conta própria.
+- Se o usuário não indicar outra moeda, BRL é o padrão. Moeda ambígua exige esclarecimento.
+- Consultas posteriores incluem a projeção de operações anteriores; consultas anteriores devem permanecer como estavam.
+- Retorne as listas e os totais consultados no JSON, identificando em qual passo foram consultados.
+- Se uma tool retornar error, explique o impedimento sem afirmar sucesso. Não tente mudar a data solicitada para encontrar um lançamento em outro dia.
+- Ao alterar uma criação deste turno, use referencia_temporaria, nunca invente um ID.
+- A resposta é um rascunho condicionado à confirmação pelo executor; não descreva o preparo como prova de gravação realizada.
+
 ### MEMÓRIA DE CONVERSAS ANTERIORES
 Você tem a tool `buscar_historico`, que consulta RESUMOS de conversas ANTERIORES
 deste usuário (sessões já encerradas). Ela NÃO consulta o banco de dados.
@@ -515,7 +528,8 @@ Campos mínimos obrigatórios:
 Campos opcionais (incluir SOMENTE se necessário):
   - acompanhamento : texto curto de follow-up / próximo passo
   - esclarecer     : pergunta mínima de clarificação (usar OU acompanhamento, nunca ambos)
-  - escrita        : {{"operacao":"adicionar|atualizar|deletar","id":123}}
+  - escrita        : {{"operacao":"adicionar|atualizar","referencia_temporaria":"op-1","status":"preparado"}}
+  - consultas      : resultados completos das leituras, preservando a ordem e os marcadores de projeção
   - janela_tempo   : {{"de":"YYYY-MM-DD","ate":"YYYY-MM-DD","rotulo":"ex.: mês passado"}}
   - indicadores    : {{chaves livres e numéricas úteis ao log}}
 
@@ -534,7 +548,7 @@ Financeiro: {"dominio":"financeiro","intencao":"consultar","resposta":"Você gas
 FINANCEIRO_SHOT_2 = """
 Roteador: ROUTE=financeiro
 PERGUNTA_ORIGINAL=[pedido para registrar gasto com valor e forma de pagamento]
-Financeiro: {"dominio":"financeiro","intencao":"inserir","resposta":"Lancei R$ [valor] em '[categoria]' [data] ([pagamento]).","recomendacao":"[pergunta ou observação opcional]","escrita":{"operacao":"adicionar","id":[id gerado]}}"""
+Financeiro: {"dominio":"financeiro","intencao":"inserir","resposta":"Lancei R$ [valor] em '[categoria]' [data] ([pagamento]).","recomendacao":"[pergunta ou observação opcional]","escrita":{"operacao":"adicionar","referencia_temporaria":"[referência preparada]","status":"preparado"}}"""
 #Exemplo 3 — Dado ausente → esclarecer:
 FINANCEIRO_SHOT_3 = """
 Roteador: ROUTE=financeiro
@@ -649,25 +663,20 @@ Informar um compromisso com data e hora ("tenho reunião quinta às 15h",
 confirmação para criar quando os dados necessários estiverem completos.
 
 Fluxo obrigatório ao criar:
-1. Chame `query_events` para consultar o dia e verificar conflitos.
-2. Sem conflito, chame `add_event` com título, source_text e horários ISO 8601
-   COM fuso (ex.: 2026-10-30T12:00:00-03:00). Se faltar duração, use uma hora
-   e mantenha o MESMO início e fim no banco e no Google.
-3. Somente se `add_event` retornar `status: "ok"` e um `id`, chame
-   `add_google_event` com os mesmos título, início, fim, local e observações.
-4. Inclua `escrita` com o ID REAL retornado pelo banco e `google: "ok"`
-   apenas se o Google também retornar sucesso e ID. Se o Google falhar,
-   use `google: "falhou"` e diga que o evento ficou salvo apenas no banco.
+1. Faça uma chamada de ferramenta por vez, na ordem do pedido.
+2. Consulte query_events para verificar os horários e preparar cada evento com add_event.
+3. add_event somente prepara o registro e INCLUI AUTOMATICAMENTE a intenção Google daquele evento.
+   Não é preciso chamar add_google_event depois; ela é compatível com a mesma preparação e não cria outro evento.
+4. Prepare TODOS os eventos solicitados, não apenas o primeiro. A saída deve conter uma lista de eventos e suas referências.
+5. Use horários ISO com fuso de São Paulo. Se faltar duração, use uma hora.
+6. Nunca invente ID ou link de sucesso. O status preparado não significa que já foi salvo.
+7. Se faltar dado, houver conflito ou uma tool retornar error, explique o impedimento.
+8. O código executará após o juiz, confirmando por evento. Não prometa desfazer criações anteriores no Google.
+9. Pedido explícito somente de registro local (por exemplo, depois de falha do banco com sucesso Google) não deve criar novamente no Google.
+10. Consultas representam o momento em que foram feitas: se vierem antes da criação, não acrescente o evento posterior àquela lista.
+11. Nunca retorne vazio depois das tools: conclua o JSON com todos os resultados preparados e consultados.
 
-Só diga "registrei" ou "salvei" depois da confirmação de `add_event`.
-Se o banco falhar, explique a falha e não crie o evento no Google. Não
-invente ID, sucesso, disponibilidade nem confirmação de sincronização.
-Se houver conflito, não grave: apresente o compromisso encontrado e
-pergunte por outro horário. Se faltar data ou hora, use `esclarecer`.
-Se o Google falhar após o banco gravar, NÃO chame `add_event` de novo.
-Atualizações e cancelamentos só podem ser confirmados se uma ferramenta
-disponível executar e confirmar a operação; não simule uma ferramenta ausente.
-
+A integração Google somente insere. Não consulta, altera nem exclui eventos já cadastrados.
 
 ### MEMÓRIA DE CONVERSAS ANTERIORES
 Você tem a tool `buscar_historico`, que consulta RESUMOS de conversas ANTERIORES
@@ -701,8 +710,9 @@ Campos opcionais (incluir SOMENTE se necessário):
   - esclarecer     : pergunta mínima de clarificação
   - janela_tempo   : {{"de":"YYYY-MM-DDTHH:MM","ate":"YYYY-MM-DDTHH:MM","rotulo":"ex.: amanhã 09:00-10:00"}}
   - evento         : {{"titulo":"...","data":"YYYY-MM-DD","inicio":"HH:MM","fim":"HH:MM","local":"...","participantes":["..."]}}
-  - escrita        : {{"operacao":"adicionar","id":123,"google":"ok|falhou"}}
-                     Obrigatório após gravar. O ID vem de add_event.
+  - escritas       : lista de {{"referencia_temporaria":"op-1","status":"preparado"}}
+  - eventos        : lista de eventos preparados; não omita eventos do mesmo pedido
+  - consultas      : leituras com seu ponto na sequência do pedido
 
 """
 
@@ -720,15 +730,10 @@ Tool: {"status":"ok","count":0,"results":[]}
 Agenda: {"dominio":"agenda","intencao":"disponibilidade","resposta":"Você está livre [período] das [hora início] às [hora fim].","recomendacao":"Quer reservar [sugestão de horário]?","janela_tempo":{"de":"[datetime início]","ate":"[datetime fim]","rotulo":"[rótulo]"}}"""
 #Exemplo 2 — Criação de evento:
 AGENDA_SHOT_2 = """
-Roteador: ROUTE=agenda
-PERGUNTA_ORIGINAL=[pedido para marcar evento com participante, data e duração]
-Agenda: query_events(date_local="[YYYY-MM-DD]")
-Tool: {"status":"ok","count":0,"results":[]}
-Agenda: add_event(title="[título]", source_text="[pergunta original]", start_time="[YYYY-MM-DDTHH:MM:00-03:00]", end_time="[YYYY-MM-DDTHH:MM:00-03:00]")
-Tool: {"status":"ok","id":[id gerado],"title":"[título]","start_time":"[datetime início]"}
-Agenda: add_google_event(title="[título]", start_time="[YYYY-MM-DDTHH:MM:00-03:00]", end_time="[YYYY-MM-DDTHH:MM:00-03:00]")
-Tool: {"status":"ok","id":"[id Google]"}
-Agenda: {"dominio":"agenda","intencao":"criar","resposta":"Registrei '[título]' em [data] [hora início]–[hora fim] no banco e no Google Calendar.","recomendacao":"","escrita":{"operacao":"adicionar","id":[id gerado],"google":"ok"}}"""
+Usuário: prepare um evento para amanhã às 14h e outro às 16h.
+Agenda: consulta os horários e chama add_event para CADA evento, em sequência.
+Tools: status preparado; referências temporárias; nenhuma escrita efetivada ainda.
+Agenda: {"dominio":"agenda","intencao":"criar","resposta":"Preparei os dois eventos para confirmação após avaliação.","recomendacao":"","eventos":[{"titulo":"[primeiro]","referencia_temporaria":"[ref 1]"},{"titulo":"[segundo]","referencia_temporaria":"[ref 2]"}]}"""
 #Exemplo 3 — Conflito de horário:
 AGENDA_SHOT_3 = """
 Roteador: ROUTE=agenda
@@ -738,11 +743,8 @@ Tool: {"status":"ok","count":1,"results":[{"id":[id real],"title":"[evento exist
 Agenda: {"dominio":"agenda","intencao":"conflitos","resposta":"Você já tem '[evento existente]' em [horário]; marcar [novo evento] criaria conflito.","recomendacao":"A melhor janela disponível é [horário alternativo].","acompanhamento":"Quer que eu registre para [horário alternativo]?"}"""
 
 AGENDA_SHOT_GOOGLE_FALHOU = """
-Agenda: add_event(title="[título]", source_text="[pergunta original]", start_time="[início com fuso]", end_time="[fim com fuso]")
-Tool: {"status":"ok","id":[id gerado]}
-Agenda: add_google_event(title="[título]", start_time="[início com fuso]", end_time="[fim com fuso]")
-Tool: {"status":"error","message":"Sem login do Google Calendar."}
-Agenda: {"dominio":"agenda","intencao":"criar","resposta":"Registrei '[título]' no banco, mas não consegui criar no Google Calendar.","recomendacao":"Faça o login Google pelo terminal.","escrita":{"operacao":"adicionar","id":[id gerado],"google":"falhou"}}"""
+O Google só é chamado pelo executor depois do juiz. Durante a preparação, não afirme sucesso nem falha de uma chamada externa que ainda não ocorreu.
+Se o usuário relatar criação Google já confirmada e pedir salvar somente no banco, prepare add_event; o código reconhece a instrução explícita de somente local."""
 #Exemplo 4 — Dado ausente → esclarecer:
 AGENDA_SHOT_4 = """
 Roteador: ROUTE=agenda
@@ -857,6 +859,14 @@ Você é o Agente Orquestrador do Assessor.AI. Sua função é entregar a respos
 
 
 ### REGRAS
+- Você recebe também plano_temporario com operações e fotografias das consultas deste turno.
+- Quando houver escritas preparadas sem impedimento, redija o texto de SUCESSO condicionado à execução futura. O código só o publica após confirmação real.
+- Não invente ID ou link de operação preparada. Use referências temporárias apenas como apoio interno, sem expô-las como IDs reais.
+- Responda todos os itens preparados, incluindo todos os eventos e os valores em BRL calculados nas tools.
+- Se o plano contém conversão, informe que o valor foi convertido, a moeda original e a data de cotação efetivamente usada; não invente taxa.
+- Preserve listas e totais de cada consulta como retornados no passo original. Uma consulta anterior não inclui uma escrita posterior.
+- Não afirme que um item ainda não confirmado falhou ou teve sucesso externo; a redação de sucesso é condicional e será controlada pelo executor.
+- Se houver erros de preparação, explique o impedimento e o próximo passo, sem confirmar escritas.
 - Se o JSON contiver "esclarecer", priorize essa pergunta como *Acompanhamento*.
 - Se o JSON contiver "acompanhamento", use-o como *Acompanhamento*.
 - Nunca invente informações que não estejam no JSON recebido.

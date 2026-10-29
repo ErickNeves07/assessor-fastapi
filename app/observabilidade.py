@@ -256,8 +256,10 @@ def fechar_turno(turno_id: str, session_id: str, rota: str, status: str) -> None
 
 
 def status_do_estado(estado: dict) -> str:
-    """Bloqueio de entrada é o sistema funcionando. Erro fica para a exceção."""
-    return "bloqueado" if estado.get("bloqueio_entrada", False) else "ok"
+    """Separa bloqueio esperado de falhas técnicas, inclusive as tratadas pelo executor."""
+    if estado.get("bloqueio_entrada", False):
+        return "bloqueado"
+    return "erro" if estado.get("erro_tecnico", False) else "ok"
 
 
 def listar_turnos() -> list[dict[str, Any]]:

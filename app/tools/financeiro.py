@@ -1,452 +1,254 @@
-from typing import Optional, List
-from langchain.tools import tool
+from datetime import date
+from decimal import Decimal
+from typing import Optional
+
+from langchain.tools import ToolRuntime, tool
 from pydantic import BaseModel, Field
+
+from app.cambio import converter_para_reais, validar_moeda
+from app.planejamento import ContextoTurno, PlanoTurno, dados_json, horario, obter_plano, preparado
 from app.tools.db import get_conn
 
-# Essa classe garante que o objeto de Python passe todos esses campos
+
+COLUNAS = "id, amount, type, category_id, description, payment_method, occurred_at, source_text"
+
+
 class AddTransactionArgs(BaseModel):
-    amount: float = Field(..., description="Valor da transação (use positivo).")
-    source_text: str = Field(..., description="Texto original do usuário.")
-    occurred_at: Optional[str] = Field(
-        default=None,
-        description="Timestamp ISO 8601; se ausente, usa NOW() no banco."
-    )
-    type_id: Optional[int] = Field(default=None, description="ID em transaction_types (1=INCOME, 2=EXPENSES, 3=TRANSFER).")
-    type_name: Optional[str] = Field(default=None, description="Nome do tipo: INCOME | EXPENSES | TRANSFER.")
-    category_name: Optional[str] = Field(default=None, description="""
-    "Nome da categoria entre as disponíveis: comida, contas, besteiras ,transporte, salário, lazer, saúde, educação, moradia, investimento, presente, outros.
-                                         """)
-    category_id: Optional[int] = Field(default=None, description="FK de categories (opcional).")
-    description: Optional[str] = Field(default=None, description="Descrição (opcional).")
-    payment_method: Optional[str] = Field(default=None, description="Forma de pagamento (opcional).")
+    amount: Decimal = Field(..., gt=0, description="Valor na moeda original informada pelo usuário.")
+    currency: str = Field(default="BRL", description="Moeda original ISO: BRL, USD, EUR etc.; nunca converta mentalmente.")
+    source_text: str = Field(..., description="Pedido original do usuário.")
+    occurred_at: Optional[str] = Field(default=None, description="Data/hora ISO; sem fuso, usa São Paulo.")
+    type_id: Optional[int] = None
+    type_name: Optional[str] = Field(default=None, description="INCOME | EXPENSES | TRANSFER")
+    category_name: Optional[str] = Field(default=None, description="comida, besteira, estudo, férias, transporte, moradia, saúde, lazer, contas, investimento, presente, outros")
+    category_id: Optional[int] = None
+    description: Optional[str] = None
+    payment_method: Optional[str] = None
 
-# Essa classe garante que o objeto de Python passe todos esses campos
+
 class QueryTransactionsArgs(BaseModel):
-    search_text: Optional[str] = Field(default=None, description="Texto para busca em source_text ou description.")
-    type_name: Optional[str] = Field(default=None, description="INCOME | EXPENSES | TRANSFER.")
-    date_from_local: Optional[str] = Field(default=None, description="Data inicial local YYYY-MM-DD (America/Sao_Paulo).")
-    date_to_local: Optional[str] = Field(default=None, description="Data final local YYYY-MM-DD (America/Sao_Paulo).")
-    limit: int = Field(default=50, description="Máximo de registros retornados.")
+    search_text: Optional[str] = None
+    type_name: Optional[str] = None
+    date_from_local: Optional[str] = None
+    date_to_local: Optional[str] = None
+    limit: int = Field(default=50, ge=1, le=500)
 
-#Garante que o campo type da tabela transactions receba um id válido (1=INCOME, 2=EXPENSES, 3=TRANSFER
-def _resolve_type_id(cur, type_id: Optional[int], type_name: Optional[str]) -> Optional[int]:
-    if type_name:
-        t = type_name.strip().upper()
-        if t == "EXPENSE":
-            t = "EXPENSES"
-        cur.execute("SELECT id FROM transaction_types WHERE UPPER(type)=%s LIMIT 1;", (t,))
-        row = cur.fetchone()
-        return row[0] if row else None
-    if type_id:
-        return int(type_id)
-    return 2
-
-def _get_category_id(cur, category_name: Optional[str]) -> Optional[int]:
-    if not category_name:
-        return None
-    cur.execute(
-        "SELECT id FROM categories WHERE LOWER(name) = LOWER(%s) LIMIT 1;",
-        (category_name,)
-    )
-    row = cur.fetchone()
-    return row[0] if row else None
-
-def _local_date_filter_sql(field: str = "occurred_at") -> str:
-    """
-    Retorna um trecho SQL para filtragem por dia local em America/Sao_Paulo.
-    Ex.: (occurred_at AT TIME ZONE 'America/Sao_Paulo')::date = %s::date
-    """
-    return f"(({field} AT TIME ZONE 'America/Sao_Paulo')::date = %s::date)"
-
-# Tool: add_transaction
-@tool("add_transaction", args_schema=AddTransactionArgs)
-def add_transaction(
-    amount: float,
-    source_text: str,
-    occurred_at: Optional[str] = None,
-    type_id: Optional[int] = None,
-    type_name: Optional[str] = None,
-    category_name: Optional[str] = None,
-    category_id: Optional[int] = None,
-    description: Optional[str] = None,
-    payment_method: Optional[str] = None,
-) -> dict:
-    """Insere uma transação financeira no banco de dados Postgres.""" # docstring obrigatório da @tools do langchain (estranho, mas legal né?)
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        resolved_type_id = _resolve_type_id(cur, type_id, type_name)
-        if not resolved_type_id:
-            return {"status": "error", "message": "Tipo inválido (use type_id ou type_name: INCOME/EXPENSES/TRANSFER)."}
-
-        if not category_id:
-            category_id = _get_category_id(cur, category_name);
-
-        if occurred_at:
-            cur.execute(
-                """
-                INSERT INTO transactions
-                    (amount, type, category_id, description, payment_method, occurred_at, source_text)
-                VALUES
-                    (%s, %s, %s, %s, %s, %s::timestamptz, %s)
-                RETURNING id, occurred_at;
-                """,
-                (amount, resolved_type_id, category_id, description, payment_method, occurred_at, source_text),
-            )
-        else:
-            cur.execute(
-                """
-                INSERT INTO transactions
-                    (amount, type, category_id, description, payment_method, occurred_at, source_text)
-                VALUES
-                    (%s, %s, %s, %s, %s, NOW(), %s)
-                RETURNING id, occurred_at;
-                """,
-                (amount, resolved_type_id, category_id, description, payment_method, source_text),
-            )
-
-        new_id, occurred = cur.fetchone()
-        conn.commit()
-        return {"status": "ok", "id": new_id, "occurred_at": str(occurred)}
-
-    except Exception as e:
-        conn.rollback()
-        return {"status": "error", "message": str(e)}
-    finally:
-        try:
-            cur.close()
-            conn.close()
-        except Exception:
-            pass
-
-@tool("query_transactions", args_schema=QueryTransactionsArgs)
-def query_transactions(
-    search_text: Optional[str] = None,
-    type_name: Optional[str] = None,
-    date_from_local: Optional[str] = None,
-    date_to_local: Optional[str] = None,
-    limit: int = 50,
-) -> dict:
-    """
-    Consulta transações com filtros por texto (source_text/description), tipo e datas locais (America/Sao_Paulo).
-    Os dados devem vir na seguinte ordem:
-    - Intervalo (date_from_local/date_to_local): ASC (cronológico).
-    - Caso contrário: DESC (mais recentes primeiro).
-    """
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        # Montar query aos poucos dependendo de cada filtro que vai ser utilizado
-        conditions = []  # cada filtro vira um elemento aqui
-        params = []      # cada valor do que será procurado do filtro é um item aqui (na mesma ordem do array de cima)
-
-        if search_text:
-            conditions.append("(t.source_text ILIKE %s OR t.description ILIKE %s)")
-            params.extend([f"%{search_text}%", f"%{search_text}%"])  
-
-        if type_name:
-            resolved = _resolve_type_id(cur, type_id=None, type_name=type_name)
-            if not resolved:
-                return {"status": "error", "message": f"Tipo inválido: {type_name}"}
-            conditions.append("t.type = %s")
-            params.append(resolved)
-
-        if date_from_local:
-            conditions.append(
-                "(t.occurred_at AT TIME ZONE 'America/Sao_Paulo')::date >= %s::date"
-            )
-            params.append(date_from_local)
-
-        if date_to_local:
-            conditions.append(
-                "(t.occurred_at AT TIME ZONE 'America/Sao_Paulo')::date <= %s::date"
-            )
-            params.append(date_to_local)
-
-        # Junta os filtros com AND, não coloca WHERE nenhum se não tiver filtro, ou seja, coloca uma string vazia
-        where_clause = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-
-        # Ordem cronológica se tem filtro de data, se não os mais recente primeiro
-        order = "ASC" if (date_from_local or date_to_local) else "DESC"
-
-        params.append(limit)  # smp o ultimo param (pro LIMIT)
-
-        cur.execute(
-            f"""
-            SELECT
-                t.id,
-                t.amount,
-                tt.type        AS type_name,
-                t.description,
-                t.payment_method,
-                t.occurred_at AT TIME ZONE 'America/Sao_Paulo' AS occurred_at_local,
-                t.source_text
-            FROM transactions t
-            JOIN transaction_types tt ON tt.id = t.type
-            {where_clause}
-            ORDER BY t.occurred_at {order}
-            LIMIT %s;
-            """,
-            params
-        )
-
-        columns = [desc[0] for desc in cur.description] #pegar somente o nome da coluna 
-        rows = [dict(zip(columns, row)) for row in cur.fetchall()]  #fazer um zip entre os nomes das colunas e os valores de cada linha, e transformar isso em um dicionário para cada linha, e depois juntar tudo numa list
-
-        # transformar em string
-        for row in rows:
-            if row.get("occurred_at_local"):
-                row["occurred_at_local"] = str(row["occurred_at_local"])
-
-        return {"status": "ok", "count": len(rows), "transactions": rows}
-
-    except Exception as e:
-        conn.rollback()
-        return {"status": "error", "message": str(e)}
-    finally:
-        try:
-            cur.close()
-            conn.close()
-        except Exception:
-            pass
-    
-@tool("total_balance")
-def total_balance() -> dict:
-    """
-    Retorna o saldo total (INCOME - EXPENSES) em todo o histórico (ignora TRANSFER).
-    """
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            """
-            SELECT
-                -- soma só as entradas
-                COALESCE(SUM(CASE WHEN tt.type = 'INCOME'   THEN t.amount ELSE 0 END), 0) AS total_income,
-                -- soma só as saídas
-                COALESCE(SUM(CASE WHEN tt.type = 'EXPENSES' THEN t.amount ELSE 0 END), 0) AS total_expenses,
-                -- saldo = entradas - saídas (TRANSFER é ignorado pelo WHERE abaixo)
-                COALESCE(SUM(CASE WHEN tt.type = 'INCOME'   THEN  t.amount
-                                  WHEN tt.type = 'EXPENSES' THEN -t.amount END), 0) AS balance
-            FROM transactions t
-            JOIN transaction_types tt ON tt.id = t.type
-            WHERE tt.type IN ('INCOME', 'EXPENSES');
-            """
-        )
-        row = cur.fetchone()
-        return {
-            "status": "ok",
-            "total_income": float(row[0]),
-            "total_expenses": float(row[1]),
-            "balance": float(row[2]),
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-    finally:
-        try:
-            cur.close()
-            conn.close()
-        except Exception:
-            pass
-
-@tool("daily_balance")
-def daily_balance(date_local: str) -> dict:
-    """
-    Retorna o saldo (INCOME - EXPENSES) do dia local informado (YYYY-MM-DD) em America/Sao_Paulo.
-    Ignora TRANSFER (type=3).
-    """
-    conn = get_conn()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            """
-            SELECT
-                COALESCE(SUM(CASE WHEN tt.type = 'INCOME'   THEN t.amount ELSE 0 END), 0) AS total_income,
-                COALESCE(SUM(CASE WHEN tt.type = 'EXPENSES' THEN t.amount ELSE 0 END), 0) AS total_expenses,
-                COALESCE(SUM(CASE WHEN tt.type = 'INCOME'   THEN  t.amount
-                                  WHEN tt.type = 'EXPENSES' THEN -t.amount END), 0) AS balance
-            FROM transactions t
-            JOIN transaction_types tt ON tt.id = t.type
-            WHERE tt.type IN ('INCOME', 'EXPENSES')
-              -- converte occurred_at para horário de SP antes de comparar com a data informada
-              AND (t.occurred_at AT TIME ZONE 'America/Sao_Paulo')::date = %s::date;
-            """,
-            (date_local,)
-        )
-        row = cur.fetchone()
-        return {
-            "status": "ok",
-            "date": date_local,
-            "total_income": float(row[0]),
-            "total_expenses": float(row[1]),
-            "balance": float(row[2]),
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-    finally:
-        try:
-            cur.close()
-            conn.close()
-        except Exception:
-            pass
 
 class UpdateTransactionArgs(BaseModel):
-    id: Optional[int] = Field(
-        default=None,
-        description="ID da transação a atualizar. Se ausente, será feita uma busca por (match_text + date_local)."
-    )
-    match_text: Optional[str] = Field(
-        default=None,
-        description="Texto para localizar transação quando id não for informado (busca em source_text/description)."
-    )
-    date_local: Optional[str] = Field(
-        default=None,
-        description="Data local (YYYY-MM-DD) em America/Sao_Paulo; usado em conjunto com match_text quando id ausente."
-    )
-    amount: Optional[float] = Field(default=None, description="Novo valor.")
-    type_id: Optional[int] = Field(default=None, description="Novo type_id (1/2/3).")
-    type_name: Optional[str] = Field(default=None, description="Novo type_name: INCOME | EXPENSES | TRANSFER.")
-    category_id: Optional[int] = Field(default=None, description="Nova categoria (id).")
-    category_name: Optional[str] = Field(default=None, description="Nova categoria (nome).")
-    description: Optional[str] = Field(default=None, description="Nova descrição.")
-    payment_method: Optional[str] = Field(default=None, description="Novo meio de pagamento.")
-    occurred_at: Optional[str] = Field(default=None, description="Novo timestamp ISO 8601.")
+    id: Optional[int] = None
+    referencia_temporaria: Optional[str] = Field(default=None, description="Referência de uma criação preparada neste turno, como op-1.")
+    match_text: Optional[str] = None
+    date_local: Optional[str] = None
+    amount: Optional[Decimal] = Field(default=None, ge=0)
+    currency: str = Field(default="BRL", description="Moeda do novo valor; BRL, USD, EUR etc.")
+    type_id: Optional[int] = None
+    type_name: Optional[str] = None
+    category_id: Optional[int] = None
+    category_name: Optional[str] = None
+    description: Optional[str] = None
+    payment_method: Optional[str] = None
+    occurred_at: Optional[str] = None
+
+
+def _contexto_leitura(runtime):
+    contexto = getattr(runtime, "context", None)
+    return contexto.plano if isinstance(contexto, ContextoTurno) else PlanoTurno()
+
+
+def _ler(sql, parametros):
+    conn = get_conn()
+    try:
+        conn.set_session(readonly=True)
+        with conn.cursor() as cur:
+            cur.execute(sql, parametros)
+            nomes = [d[0] for d in cur.description]
+            return [dict(zip(nomes, r)) for r in cur.fetchall()]
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+def _resolver(tabela, campo, nome=None, identificador=None, padrao=None):
+    if nome is None and identificador is None:
+        return padrao
+    coluna, valor = (campo, nome) if nome is not None else ("id", identificador)
+    comparacao = f"LOWER({coluna})=LOWER(%s)" if nome is not None else "id=%s"
+    linhas = _ler(f"SELECT id FROM {tabela} WHERE {comparacao}", (valor,))
+    if not linhas:
+        raise ValueError(f"{tabela}: valor não encontrado no cadastro.")
+    return linhas[0]["id"]
+
+
+def _tipo(type_id=None, type_name=None, padrao=None):
+    nome = type_name.strip().upper() if type_name else None
+    nome = "EXPENSES" if nome == "EXPENSE" else nome
+    return _resolver("transaction_types", "type", nome, type_id, padrao)
+
+
+def _visao(plano):
+    import json
+    projecoes = plano.projecoes("financeiro")
+    sql = """WITH p AS (
+        SELECT * FROM jsonb_to_recordset(%s::jsonb) AS x(
+            id bigint, amount numeric, type integer, category_id integer,
+            description text, payment_method varchar, occurred_at timestamptz,
+            source_text text, referencia_temporaria text)
+    ), visao AS (
+        SELECT t.id,t.amount,t.type,t.category_id,t.description,t.payment_method,
+               t.occurred_at,t.source_text,NULL::text AS referencia_temporaria,false AS projetado
+        FROM transactions t WHERE NOT EXISTS (SELECT 1 FROM p WHERE p.id=t.id)
+        UNION ALL
+        SELECT p.*,true AS projetado FROM p
+    ) """
+    return sql, [json.dumps(projecoes, ensure_ascii=False)]
+
+
+def _falha(plano, exc):
+    return plano.falha(str(exc), tecnico=getattr(exc, "tecnico", not isinstance(exc, ValueError)))
+
+
+@tool("add_transaction", args_schema=AddTransactionArgs)
+def add_transaction(amount: Decimal, source_text: str, currency: str = "BRL", occurred_at: Optional[str] = None,
+                    type_id: Optional[int] = None, type_name: Optional[str] = None,
+                    category_name: Optional[str] = None, category_id: Optional[int] = None,
+                    description: Optional[str] = None, payment_method: Optional[str] = None,
+                    runtime: ToolRuntime[ContextoTurno] = None) -> dict:
+    """Prepara uma criação financeira. Não grava nem retorna ID do banco; aguarda o juiz."""
+    plano = obter_plano(runtime)
+    try:
+        instante = horario(occurred_at, plano.agora)
+        moeda = validar_moeda(currency, runtime.context.pergunta)
+        valor, conversao = converter_para_reais(amount, moeda, instante.date(), plano.agora.date())
+        registro = dict(id=None, amount=valor, type=_tipo(type_id, type_name, 2),
+                        category_id=_resolver("categories", "name", category_name, category_id),
+                        description=description, payment_method=payment_method, occurred_at=instante,
+                        source_text=runtime.context.pergunta)
+        return preparado(plano.adicionar("add_transaction", {"registro": registro}, conversao=conversao))
+    except Exception as exc:
+        return _falha(plano, exc)
+
+
+@tool("query_transactions", args_schema=QueryTransactionsArgs)
+def query_transactions(search_text: Optional[str] = None, type_name: Optional[str] = None,
+                       date_from_local: Optional[str] = None, date_to_local: Optional[str] = None,
+                       limit: int = 50, runtime: ToolRuntime[ContextoTurno] = None) -> dict:
+    """Consulta transações e as operações preparadas ANTES desta consulta, respeitando filtros e limite."""
+    plano = _contexto_leitura(runtime)
+    try:
+        prefixo, parametros = _visao(plano)
+        condicoes = []
+        if search_text:
+            condicoes.append("(t.source_text ILIKE %s OR t.description ILIKE %s)")
+            parametros.extend([f"%{search_text}%"] * 2)
+        if type_name:
+            condicoes.append("t.type=%s")
+            parametros.append(_tipo(type_name=type_name))
+        for valor, operador in [(date_from_local, ">="), (date_to_local, "<=")]:
+            if valor:
+                date.fromisoformat(valor)
+                condicoes.append(f"(t.occurred_at AT TIME ZONE 'America/Sao_Paulo')::date {operador} %s::date")
+                parametros.append(valor)
+        where = " WHERE " + " AND ".join(condicoes) if condicoes else ""
+        ordem = "ASC" if date_from_local or date_to_local else "DESC"
+        parametros.append(limit)
+        nulos = "LAST" if ordem == "ASC" else "FIRST"
+        linhas = _ler(prefixo + f"""SELECT t.id,t.amount,tt.type AS type_name,t.description,t.payment_method,
+            t.occurred_at AT TIME ZONE 'America/Sao_Paulo' AS occurred_at_local,t.source_text,
+            t.referencia_temporaria,t.projetado,'BRL' AS currency
+            FROM visao t JOIN transaction_types tt ON tt.id=t.type
+            {where} ORDER BY t.occurred_at {ordem},t.id {ordem} NULLS {nulos},t.referencia_temporaria LIMIT %s""", parametros)
+        resultado = dados_json({"status": "ok", "count": len(linhas), "transactions": linhas,
+                               "projecao": bool(plano.projecoes("financeiro"))})
+        return plano.leitura("query_transactions", dict(search_text=search_text, type_name=type_name,
+                              date_from_local=date_from_local, date_to_local=date_to_local, limit=limit), resultado)
+    except Exception as exc:
+        return _falha(plano, exc)
+
+
+def _saldo(plano, dia=None):
+    prefixo, parametros = _visao(plano)
+    filtro = ""
+    if dia:
+        date.fromisoformat(dia)
+        filtro = " AND (t.occurred_at AT TIME ZONE 'America/Sao_Paulo')::date=%s::date"
+        parametros.append(dia)
+    linhas = _ler(prefixo + """SELECT
+        COALESCE(SUM(CASE WHEN tt.type='INCOME' THEN amount ELSE 0 END),0) AS total_income,
+        COALESCE(SUM(CASE WHEN tt.type='EXPENSES' THEN amount ELSE 0 END),0) AS total_expenses,
+        COALESCE(SUM(CASE WHEN tt.type='INCOME' THEN amount ELSE -amount END),0) AS balance
+        FROM visao t JOIN transaction_types tt ON tt.id=t.type
+        WHERE tt.type IN ('INCOME','EXPENSES')""" + filtro, parametros)
+    return dados_json({"status": "ok", **linhas[0], "currency": "BRL", "projecao": bool(plano.projecoes("financeiro")),
+                       **({"date": dia} if dia else {})})
+
+
+@tool("total_balance")
+def total_balance(runtime: ToolRuntime[ContextoTurno] = None) -> dict:
+    """Retorna saldo total em BRL, incluindo somente operações preparadas anteriormente neste turno."""
+    plano = _contexto_leitura(runtime)
+    try:
+        return plano.leitura("total_balance", {}, _saldo(plano))
+    except Exception as exc:
+        return _falha(plano, exc)
+
+
+@tool("daily_balance")
+def daily_balance(date_local: str, runtime: ToolRuntime[ContextoTurno] = None) -> dict:
+    """Retorna saldo do dia de São Paulo em BRL, incluindo operações preparadas anteriormente."""
+    plano = _contexto_leitura(runtime)
+    try:
+        return plano.leitura("daily_balance", {"date_local": date_local}, _saldo(plano, date_local))
+    except Exception as exc:
+        return _falha(plano, exc)
+
 
 @tool("update_transaction", args_schema=UpdateTransactionArgs)
-def update_transaction(
-    id: Optional[int] = None,
-    match_text: Optional[str] = None,
-    date_local: Optional[str] = None,
-    amount: Optional[float] = None,
-    type_id: Optional[int] = None,
-    type_name: Optional[str] = None,
-    category_id: Optional[int] = None,
-    category_name: Optional[str] = None,
-    description: Optional[str] = None,
-    payment_method: Optional[str] = None,
-    occurred_at: Optional[str] = None,
-) -> dict:
-    """
-    Atualiza uma transação existente.
-    Estratégias:
-      - Se 'id' for informado: atualiza diretamente por ID.
-      - Caso contrário: localiza a transação mais recente que combine (match_text em source_text/description)
-        E (date_local em America/Sao_Paulo), então atualiza.
-    Retorna: status, rows_affected, id, e o registro atualizado.
-    """
-    if not any([amount, type_id, type_name, category_id, category_name, description, payment_method, occurred_at]):
-        return {"status": "error", "message": "Nada para atualizar: forneça pelo menos um campo (amount, type, category, description, payment_method, occurred_at)."}
-
-    conn = get_conn()
-    cur = conn.cursor()
+def update_transaction(id: Optional[int] = None, referencia_temporaria: Optional[str] = None,
+                       match_text: Optional[str] = None, date_local: Optional[str] = None,
+                       amount: Optional[Decimal] = None, currency: str = "BRL", type_id: Optional[int] = None,
+                       type_name: Optional[str] = None, category_id: Optional[int] = None,
+                       category_name: Optional[str] = None, description: Optional[str] = None,
+                       payment_method: Optional[str] = None, occurred_at: Optional[str] = None,
+                       runtime: ToolRuntime[ContextoTurno] = None) -> dict:
+    """Prepara alteração de transação por ID, referência temporária ou texto/data; não executa UPDATE."""
+    plano = obter_plano(runtime)
     try:
-        # Resolve target_id
-        target_id = id
-        if target_id is None:
+        if all(v is None for v in (amount, type_id, type_name, category_id, category_name, description, payment_method, occurred_at)):
+            raise ValueError("Informe pelo menos um campo para alterar.")
+        prefixo, params = _visao(plano)
+        if referencia_temporaria:
+            where = "referencia_temporaria=%s"; params.append(referencia_temporaria)
+        elif id is not None:
+            where = "id=%s"; params.append(id)
+        else:
             if not match_text or not date_local:
-                return {"status": "error", "message": "Sem 'id': informe match_text E date_local para localizar o registro."}
-
-            # Buscar o mais recente no dia local informado que combine o texto
-            cur.execute(
-                f"""
-                SELECT t.id
-                FROM transactions t
-                WHERE (t.source_text ILIKE %s OR t.description ILIKE %s)
-                  AND {_local_date_filter_sql("t.occurred_at")}
-                ORDER BY t.occurred_at DESC
-                LIMIT 1;
-                """,
-                (f"%{match_text}%", f"%{match_text}%", date_local)
-            )
-            row = cur.fetchone()
-            if not row:
-                return {"status": "error", "message": "Nenhuma transação encontrada para os filtros fornecidos."}
-            target_id = row[0]
-
-        # Resolver type_id / category_id a partir de nomes, se fornecidos
-        resolved_type_id = _resolve_type_id(cur, type_id, type_name) if (type_id or type_name) else None
-        resolved_category_id = category_id
-        if category_name and not category_id:
-            resolved_category_id = _get_category_id(cur, category_name)
-
-        # Montar SET dinâmico
-        sets = []
-        params: List[object] = []
-        if amount is not None:
-            sets.append("amount = %s")
-            params.append(amount)
-        if resolved_type_id is not None:
-            sets.append("type = %s")
-            params.append(resolved_type_id)
-        if resolved_category_id is not None:
-            sets.append("category_id = %s")
-            params.append(resolved_category_id)
-        if description is not None:
-            sets.append("description = %s")
-            params.append(description)
-        if payment_method is not None:
-            sets.append("payment_method = %s")
-            params.append(payment_method)
+                raise ValueError("Informe ID, referência temporária ou descrição e data local.")
+            date.fromisoformat(date_local)
+            where = "(source_text ILIKE %s OR description ILIKE %s) AND (occurred_at AT TIME ZONE 'America/Sao_Paulo')::date=%s::date"
+            params.extend([f"%{match_text}%", f"%{match_text}%", date_local])
+        linhas = _ler(prefixo + "SELECT " + COLUNAS + ",referencia_temporaria FROM visao WHERE " + where + " ORDER BY occurred_at DESC LIMIT 1", params)
+        if not linhas:
+            raise ValueError("Nenhuma transação encontrada para os filtros fornecidos.")
+        antes = linhas[0]
+        registro = {k: antes[k] for k in COLUNAS.split(", ")}
+        conversao = None
         if occurred_at is not None:
-            sets.append("occurred_at = %s::timestamptz")
-            params.append(occurred_at)
-
-        if not sets:
-            return {"status": "error", "message": "Nenhum campo válido para atualizar."}
-
-        params.append(target_id)
-
-        cur.execute(
-            f"UPDATE transactions SET {', '.join(sets)} WHERE id = %s;",
-            params
-        )
-        rows_affected = cur.rowcount
-        conn.commit()
-
-        # Retornar o registro atualizado
-        cur.execute(
-            """
-            SELECT
-              t.id, t.occurred_at, t.amount, tt.type AS type_name,
-              c.name AS category_name, t.description, t.payment_method, t.source_text
-            FROM transactions t
-            JOIN transaction_types tt ON tt.id = t.type
-            LEFT JOIN categories c ON c.id = t.category_id
-            WHERE t.id = %s;
-            """,
-            (target_id,)
-        )
-        r = cur.fetchone()
-        updated = None
-        if r:
-            updated = {
-                "id": r[0],
-                "occurred_at": str(r[1]),
-                "amount": float(r[2]),
-                "type": r[3],
-                "category": r[4],
-                "description": r[5],
-                "payment_method": r[6],
-                "source_text": r[7],
-            }
-
-        return {
-            "status": "ok",
-            "rows_affected": rows_affected,
-            "id": target_id,
-            "updated": updated
-        }
-
-    except Exception as e:
-        conn.rollback()
-        return {"status": "error", "message": str(e)}
-    finally:
-        try:
-            cur.close()
-            conn.close()
-        except Exception:
-            pass
+            registro["occurred_at"] = horario(occurred_at, plano.agora)
+        if amount is not None:
+            moeda = validar_moeda(currency, runtime.context.pergunta)
+            instante = horario(registro["occurred_at"], plano.agora)
+            registro["amount"], conversao = converter_para_reais(amount, moeda, instante.date(), plano.agora.date())
+        if type_id is not None or type_name is not None:
+            registro["type"] = _tipo(type_id, type_name)
+        if category_id is not None or category_name is not None:
+            registro["category_id"] = _resolver("categories", "name", category_name, category_id)
+        for campo, valor in (("description", description), ("payment_method", payment_method)):
+            if valor is not None:
+                registro[campo] = valor
+        dados = {"id": antes["id"], "referencia_alvo": antes["referencia_temporaria"], "registro": registro}
+        return preparado(plano.adicionar("update_transaction", dados, antes=antes, conversao=conversao))
+    except Exception as exc:
+        return _falha(plano, exc)
 
 
-# Exporta a lista de tools
 TOOLS = [add_transaction, query_transactions, total_balance, daily_balance, update_transaction]
